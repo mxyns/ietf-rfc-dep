@@ -16,12 +16,10 @@ fn main() {
 
         // Discover identifiers referenced in the cached documents
         for item in cache.map.iter_mut() {
-            let x = item.1.borrow_mut();
-            let meta_list = x.meta.as_ref();
-            if meta_list.is_none() {
-                continue
-            }
-            for meta in meta_list.unwrap() {
+            let item = item.1.borrow_mut();
+            let meta_list: &Vec<Meta> = item.meta.as_ref();
+
+            for meta in meta_list {
                 match meta {
                     Meta::Updates(list)
                     | Meta::Obsoletes(list)
@@ -39,8 +37,6 @@ fn main() {
                 }
             }
         }
-
-        println!("{:#?}", to_update);
 
         if to_update.len() == 0 {
             break
@@ -62,15 +58,13 @@ fn main() {
             id_doc_new.insert(id, cached);
         }
 
-        println!("{:#?}", id_doc_new);
-
         // Copy cache to lookup already existing documents when linking
         let old_cache = cache.clone();
 
         // Update current cache with new documents and new links
         for item in cache.map.iter_mut() {
             let item_ref = &mut *item.1.borrow_mut();
-            for meta in item_ref.meta.as_mut().unwrap() {
+            for meta in &mut item_ref.meta {
                 match meta {
                     Meta::Updates(list)
                     | Meta::Obsoletes(list)
@@ -78,9 +72,9 @@ fn main() {
                         for item in list {
                             match item {
                                 DocRef::Identifier(id) => {
-                                    if let Some(cached) = id_doc_new.get(id) {
+                                    if let Some(cached) = id_doc_new.get(id.as_str()) {
                                         *item = DocRef::CacheEntry(cached.clone());
-                                    } else if let Some(cached) = old_cache.get(id) {
+                                    } else if let Some(cached) = old_cache.get(&id) {
                                         *item = DocRef::CacheEntry(cached.clone());
                                     } else {
                                         panic!("{id} has not been discovered even though it should have");
@@ -95,4 +89,6 @@ fn main() {
             }
         }
     }
+
+    println!("{:#?}", cache);
 }

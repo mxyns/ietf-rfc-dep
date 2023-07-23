@@ -1,3 +1,4 @@
+use std::fmt;
 use regex;
 use regex::bytes::Regex;
 use crate::cache::{CachedDoc};
@@ -6,15 +7,24 @@ use crate::cache::{CachedDoc};
 pub struct IetfDoc {
     pub name: String,
     pub url: String,
-    pub title: Option<String>,
-    pub meta: Option<Vec<Meta>>,
+    pub title: String,
+    pub meta: Vec<Meta>,
 }
 
-#[derive(Debug)]
 pub enum DocRef {
     Identifier(String),
     CacheEntry(CachedDoc),
 }
+
+impl fmt::Debug for DocRef {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            DocRef::Identifier(id) => { write!(f, "Identifier(\"{}\")", id) }
+            DocRef::CacheEntry(cached) => { write!(f, "CacheEntry(\"{}\")", cached.borrow().name) }
+        }
+    }
+}
+
 
 #[derive(Debug)]
 pub enum Meta {
@@ -61,9 +71,7 @@ pub fn name_to_id(name: &str) -> String {
 }
 
 impl IetfDoc {
-
     pub fn from_url(url: &str) -> IetfDoc {
-
         let resp = reqwest::blocking::get(url).unwrap();
         let text = resp.text().unwrap();
         let document = scraper::Html::parse_document(&text);
@@ -105,8 +113,8 @@ impl IetfDoc {
         let doc = IetfDoc {
             name: name_to_id(name.as_str()),
             url: url.to_string(),
-            title: Some(title),
-            meta: Some(doc_meta),
+            title,
+            meta: doc_meta,
         };
 
         doc

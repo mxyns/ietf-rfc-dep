@@ -1,12 +1,11 @@
 use std::cell::{RefCell};
 use std::collections::HashMap;
-use std::fmt::Debug;
 use std::rc::Rc;
 use crate::doc::{IetfDoc};
 
 #[derive(Debug, Clone)]
 pub struct DocCache {
-    pub(crate) map: HashMap::<String, CachedDoc>
+    pub map: HashMap::<String, CachedDoc>
 }
 
 pub type CachedDoc = Rc<RefCell<IetfDoc>>;
