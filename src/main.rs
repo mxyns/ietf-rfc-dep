@@ -8,10 +8,15 @@ use crate::doc::IetfDoc;
 
 fn main() {
     let mut cache = DocCache::new();
-    let doc = IetfDoc::from_url("https://datatracker.ietf.org/doc/rfc7854");
+    let doc = IetfDoc::from_url("https://datatracker.ietf.org/doc/rfc4271");
     cache.put_doc(doc);
 
+    let mut loop_count = 0;
     loop {
+
+        loop_count += 1;
+        println!("Depth = {loop_count}");
+
         let mut to_update = HashSet::new();
 
         // Discover identifiers referenced in the cached documents
@@ -77,7 +82,7 @@ fn main() {
                                     } else if let Some(cached) = old_cache.get(&id) {
                                         *item = DocRef::CacheEntry(cached.clone());
                                     } else {
-                                        panic!("{id} has not been discovered even though it should have");
+                                        // Item to be discovered at next iteration
                                     }
                                 }
                                 DocRef::CacheEntry(_) => {}
