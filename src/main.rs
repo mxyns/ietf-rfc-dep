@@ -1,13 +1,15 @@
 mod cache;
 mod doc;
+mod gui;
 
-use crate::cache::{DocCache};
-use crate::doc::IetfDoc;
+use crate::gui::{RFCDepApp};
+
+// TODO rework cache to be independent of docs (w/ generic)
 
 fn main() {
-    let mut cache = DocCache::new();
-    let doc = IetfDoc::from_url("https://datatracker.ietf.org/doc/rfc4271");
-    let _cached_root = doc.resolve_dependencies(&mut cache, true);
-
-    println!("{:#?}", cache);
+    let options = eframe::NativeOptions {
+        centered: true,
+        ..Default::default()
+    };
+    eframe::run_native("rfc-dep", options, Box::new(|cc| Box::new(RFCDepApp::new(cc)))).unwrap()
 }

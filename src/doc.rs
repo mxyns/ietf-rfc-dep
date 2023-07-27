@@ -1,11 +1,9 @@
-use std::collections::{HashMap, HashSet};
 use std::fmt;
 use regex;
 use regex::bytes::Regex;
 use crate::cache::{CachedDoc};
-use crate::DocCache;
 
-#[derive(Debug)]
+#[derive(Debug, Default, Clone)]
 pub struct IetfDoc {
     pub name: String,
     pub url: String,
@@ -13,6 +11,7 @@ pub struct IetfDoc {
     pub meta: Vec<Meta>,
 }
 
+#[derive(Clone)]
 pub enum DocRef {
     Identifier(String),
     CacheEntry(CachedDoc),
@@ -28,11 +27,14 @@ impl fmt::Debug for DocRef {
 }
 
 
-#[derive(Debug)]
+#[derive(Debug, Default, Clone)]
 pub enum Meta {
+    #[default]
+    None,
     Updates(Vec<DocRef>),
-    Obsoletes(Vec<DocRef>),
     UpdatedBy(Vec<DocRef>),
+    Obsoletes(Vec<DocRef>),
+    ObsoletedBy(Vec<DocRef>),
     Was(String),
 }
 
@@ -43,20 +45,24 @@ impl Meta {
                 let updaters = Meta::UpdatedBy(Self::meta_array_to_doc_identifiers(inner_text));
                 Ok(updaters)
             }
+            "updates" => {
+                let updated = Meta::Updates(Self::meta_array_to_doc_identifiers(inner_text));
+                Ok(updated)
+            }
             "obsoletes" => {
                 let obsoleted = Meta::Obsoletes(Self::meta_array_to_doc_identifiers(inner_text));
                 Ok(obsoleted)
             }
-            "updates" => {
-                let updated = Meta::Updates(Self::meta_array_to_doc_identifiers(inner_text));
-                Ok(updated)
+            "obsoleted_by" => {
+                let obsoleters = Meta::ObsoletedBy(Self::meta_array_to_doc_identifiers(inner_text));
+                Ok(obsoleters)
             }
             "was" => {
                 let was = Meta::Was(inner_text[1].trim().to_string());
                 Ok(was)
             }
             _ => {
-                Err("Unknown Type".to_string())
+                Err(format!("Unknown Type {tyype}"))
             }
         }
     }
@@ -73,8 +79,8 @@ pub fn name_to_id(name: &str) -> String {
 }
 
 impl IetfDoc {
-    pub fn from_url(url: &str) -> IetfDoc {
-        let resp = reqwest::blocking::get(url).unwrap();
+    pub fn from_url(url: String) -> IetfDoc {
+        let resp = reqwest::blocking::get(&*url).unwrap();
         let text = resp.text().unwrap();
         let document = scraper::Html::parse_document(&text);
 
@@ -107,8 +113,11 @@ impl IetfDoc {
             let tyype = String::from_utf8(tyype).unwrap();
 
 
-            if let Ok(meta) = Meta::from_html(tyype, inner_text) {
+            let meta = Meta::from_html(tyype, inner_text);
+            if let Ok(meta) = meta {
                 doc_meta.push(meta);
+            } else {
+                println!("Meta: {}", meta.err().unwrap())
             }
         }
 
@@ -122,96 +131,54 @@ impl IetfDoc {
         doc
     }
 
-    pub fn resolve_dependencies(self, cache: &mut DocCache, print: bool) -> CachedDoc {
+    pub fn lookup(title: &str) -> Vec<IetfDoc> {
 
-        let cached_root = cache.put_doc(self);
-
-        let mut loop_count = 0;
-        loop {
-
-            loop_count += 1;
-            if print {
-                println!("Depth = {loop_count}");
-            }
-
-            let mut to_update = HashSet::new();
-
-            // Discover identifiers referenced in the cached documents
-            for item in cache.map.iter_mut() {
-                let item = item.1.borrow_mut();
-                let meta_list: &Vec<Meta> = item.meta.as_ref();
-
-                for meta in meta_list {
-                    match meta {
-                        Meta::Updates(list)
-                        | Meta::Obsoletes(list)
-                        | Meta::UpdatedBy(list) => {
-                            for item in list {
-                                match item {
-                                    DocRef::Identifier(id) => {
-                                        to_update.insert(id.clone());
-                                    }
-                                    DocRef::CacheEntry(_) => {}
-                                };
-                            };
-                        }
-                        Meta::Was(_) => {}
-                    }
-                }
-            }
-
-            if to_update.len() == 0 {
-                break
-            }
-
-            // Query uncached documents
-            // TODO async concurrent/parallel
-            let mut id_doc_new = HashMap::<String, CachedDoc>::new();
-            for id in to_update {
-
-                // Filter out the ones that are already cached
-                if cache.map.contains_key(&id) {
-                    continue;
-                }
-
-                // Query document and cache them
-                let doc = IetfDoc::from_url(format!("https://datatracker.ietf.org/doc/{}", id).as_str());
-                let cached = cache.put_doc(doc);
-                id_doc_new.insert(id, cached);
-            }
-
-            // Copy cache to lookup already existing documents when linking
-            let old_cache = cache.clone();
-
-            // Update current cache with new documents and new links
-            for item in cache.map.iter_mut() {
-                let item_ref = &mut *item.1.borrow_mut();
-                for meta in &mut item_ref.meta {
-                    match meta {
-                        Meta::Updates(list)
-                        | Meta::Obsoletes(list)
-                        | Meta::UpdatedBy(list) => {
-                            for item in list {
-                                match item {
-                                    DocRef::Identifier(id) => {
-                                        if let Some(cached) = id_doc_new.get(id.as_str()) {
-                                            *item = DocRef::CacheEntry(cached.clone());
-                                        } else if let Some(cached) = old_cache.get(&id) {
-                                            *item = DocRef::CacheEntry(cached.clone());
-                                        } else {
-                                            // Item to be discovered at next iteration
-                                        }
-                                    }
-                                    DocRef::CacheEntry(_) => {}
-                                };
-                            };
-                        }
-                        Meta::Was(_) => {}
-                    }
-                }
-            }
+        if title.len() == 0 {
+            return vec![]
         }
 
-        cached_root
+        let query = format!("https://datatracker.ietf.org/api/v1/doc/document/?title__icontains={title}&limit=100&offset=0&name__startswith=rfc&format=json");
+        println!("query = {query}");
+        let resp = reqwest::blocking::get(query).unwrap();
+        let json: serde_json::Value = resp.json().unwrap();
+
+        let urls: Vec<String> = json.get("objects").unwrap().as_array().unwrap().iter()
+            .map(|obj| obj.get("name"))
+            .flatten()
+            .map(serde_json::Value::as_str)
+            .flatten()
+            .map(|name| format!("https://datatracker.ietf.org/doc/{name}"))
+            .collect();
+
+        println!("{} matches = {:#?}", urls.len(), &urls);
+
+        urls.into_iter()
+            .map(IetfDoc::from_url)
+            .collect()
+    }
+
+    pub fn missing(&self) -> usize {
+
+        let mut missing = 0;
+        for meta in &self.meta {
+            match meta {
+                Meta::Updates(list)
+                | Meta::Obsoletes(list)
+                | Meta::UpdatedBy(list)
+                | Meta::ObsoletedBy(list) => {
+                    for item in list {
+                        match item {
+                            DocRef::Identifier(_) => {
+                                missing += 1;
+                            }
+                            DocRef::CacheEntry(_) => {}
+                        };
+                    };
+                }
+                Meta::Was(_) | Meta::None => {}
+            }
+        };
+
+        missing
     }
 }
