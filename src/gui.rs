@@ -133,6 +133,10 @@ impl eframe::App for RFCDepApp {
                 });
             });
 
+            let name_to_href = |ui: &mut egui::Ui, s: &String| {
+                ui.hyperlink_to(s, format!("https://datatracker.ietf.org/doc/{s}"))
+            };
+
             let selected_tab = tabs.get(self.selected_tab).unwrap();
             match selected_tab {
                 Tabs::List => {
@@ -140,14 +144,14 @@ impl eframe::App for RFCDepApp {
                         .striped(true)
                         .vscroll(true)
                         .auto_shrink([false, false])
-                        .column(Column::auto().resizable(true))
-                        .column(Column::auto().resizable(true))
-                        .column(Column::auto().resizable(true))
-                        .column(Column::auto().resizable(true))
-                        .column(Column::auto().resizable(true))
-                        .column(Column::auto().resizable(true))
-                        .column(Column::auto().resizable(true))
-                        .column(Column::auto().resizable(true))
+                        .column(Column::initial(20.0).clip(true).resizable(true))
+                        .column(Column::initial(20.0).clip(true).resizable(true))
+                        .column(Column::initial(40.0).clip(true).resizable(true))
+                        .column(Column::initial(80.0).clip(true).resizable(true))
+                        .column(Column::initial(50.0).clip(true).resizable(true))
+                        .column(Column::initial(50.0).clip(true).resizable(true))
+                        .column(Column::initial(50.0).clip(true).resizable(true))
+                        .column(Column::initial(50.0).clip(true).resizable(true))
                         .column(Column::remainder())
                         .header(10.0, |mut header| {
                             vec!["dep", "Read", "Name", "Title", "Relations", "Updates", "Obsoletes", "Updated By", "Obsoleted By"].drain(..).for_each(
@@ -168,7 +172,7 @@ impl eframe::App for RFCDepApp {
                                         };
                                     });
                                     row.col(|ui| { ui.checkbox(&mut doc.read, ""); });
-                                    row.col(|ui| { ui.label(name); });
+                                    row.col(|ui| { name_to_href(ui, name); });
                                     row.col(|ui| { ui.label(cache.title.clone()); });
                                     row.col(|ui| { ui.label(cache.meta.len().to_string() ); });
                                     row.col(|ui| {
@@ -177,8 +181,8 @@ impl eframe::App for RFCDepApp {
                                                 if let Meta::Updates(list) = meta {
                                                     for meta in list {
                                                         match meta {
-                                                            Identifier(id) => { ui.label(id); }
-                                                            DocRef::CacheEntry(entry) => { ui.label(entry.borrow().name.clone()); }
+                                                            Identifier(id) => { name_to_href(ui, id); }
+                                                            DocRef::CacheEntry(entry) => { name_to_href(ui, &entry.borrow().name.clone()); }
                                                         }
                                                     }
                                                 }
@@ -191,8 +195,8 @@ impl eframe::App for RFCDepApp {
                                                 if let Meta::Obsoletes(list) = meta {
                                                     for meta in list {
                                                         match meta {
-                                                            Identifier(id) => { ui.label(id); }
-                                                            DocRef::CacheEntry(entry) => { ui.label(entry.borrow().name.clone()); }
+                                                            Identifier(id) => { name_to_href(ui, id); }
+                                                            DocRef::CacheEntry(entry) => { name_to_href(ui, &entry.borrow().name.clone()); }
                                                         }
                                                     }
                                                 }
@@ -205,8 +209,8 @@ impl eframe::App for RFCDepApp {
                                                 if let Meta::UpdatedBy(list) = meta {
                                                     for meta in list {
                                                         match meta {
-                                                            Identifier(id) => { ui.label(id); }
-                                                            DocRef::CacheEntry(entry) => { ui.label(entry.borrow().name.clone()); }
+                                                            Identifier(id) => { name_to_href(ui, id); }
+                                                            DocRef::CacheEntry(entry) => { name_to_href(ui, &entry.borrow().name.clone()); }
                                                         }
                                                     }
                                                 }
@@ -219,8 +223,8 @@ impl eframe::App for RFCDepApp {
                                                 if let Meta::ObsoletedBy(list) = meta {
                                                     for meta in list {
                                                         match meta {
-                                                            Identifier(id) => { ui.label(id); }
-                                                            DocRef::CacheEntry(entry) => { ui.label(entry.borrow().name.clone()); }
+                                                            Identifier(id) => { name_to_href(ui, id); }
+                                                            DocRef::CacheEntry(entry) => { name_to_href(ui, &entry.borrow().name.clone()); }
                                                         }
                                                     }
                                                 }

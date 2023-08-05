@@ -5,6 +5,8 @@ mod gui;
 use crate::gui::{RFCDepApp};
 
 // TODO rework cache to be independent of docs (w/ generic)
+// TODO graph gui
+// TODO persistent read and cache
 
 fn main() {
     let options = eframe::NativeOptions {
