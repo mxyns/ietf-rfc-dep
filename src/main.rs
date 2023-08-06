@@ -4,14 +4,12 @@ mod gui;
 
 use crate::gui::{RFCDepApp};
 
-// TODO rework cache to be independent of docs (w/ generic)
-// TODO graph gui
 // TODO persistent read and cache
     // TODO move dep count to DocState (needs algo with root search)
     // TODO save DocState with DocCache (DocState has a CachedDoc which needs DocCache for Deser. so I need to rework cache before)
 // TODO reduce load on CPU when nothing is needed (eg: do not recompute DocState each frame)
 // TODO async concurrent/parallel doc queries
-// TODO algo to resolve dependencies only for a document as root
+// TODO graph gui
 
 fn main() {
     let options = eframe::NativeOptions {
