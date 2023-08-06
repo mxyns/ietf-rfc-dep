@@ -2,8 +2,6 @@ use std::fmt;
 use regex;
 use regex::bytes::Regex;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
-use crate::cache::CachedDoc;
-
 
 #[derive(Debug, Default, Clone, Serialize, Deserialize)]
 pub struct IetfDoc {
@@ -16,14 +14,14 @@ pub struct IetfDoc {
 #[derive(Clone)]
 pub enum DocRef {
     Identifier(String),
-    CacheEntry(CachedDoc),
+    CacheEntry(String),
 }
 
 impl fmt::Debug for DocRef {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             DocRef::Identifier(id) => { write!(f, "Identifier(\"{}\")", id) }
-            DocRef::CacheEntry(cached) => { write!(f, "CacheEntry(\"{}\")", cached.borrow().name) }
+            DocRef::CacheEntry(id) => { write!(f, "CacheEntry(\"{}\")", id) }
         }
     }
 }
@@ -32,7 +30,7 @@ impl Serialize for DocRef {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error> where S: Serializer {
         match self {
             DocRef::Identifier(id) => serializer.serialize_str(id),
-            DocRef::CacheEntry(cached) => serializer.serialize_str(&*cached.borrow().name)
+            DocRef::CacheEntry(id) => serializer.serialize_str(id)
         }
     }
 }

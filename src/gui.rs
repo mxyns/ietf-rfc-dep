@@ -6,19 +6,18 @@ use eframe::egui::Align;
 use egui_extras::{Column, TableBuilder};
 use if_chain::if_chain;
 use crate::doc::{DocRef, IetfDoc, Meta};
-use crate::cache::{CachedDoc, DocCache};
+use crate::cache::{DocCache};
 use crate::doc::DocRef::Identifier;
 
 #[derive(Clone, Debug)]
 struct DocState {
-    cache: CachedDoc,
-    read: bool,
+    is_read: bool,
     to_resolve: bool,
 }
 
 type DocStates = RefCell<HashMap<String, DocState>>;
 
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub struct RFCDepApp {
     search_query: String,
     query_result: Vec<IetfDoc>,
@@ -44,11 +43,10 @@ impl RFCDepApp {
 
     fn put_doc(cache: &mut DocCache, docs_state: &mut DocStates, doc: IetfDoc) {
         let name = doc.name.clone();
-        let cached = cache.put_doc(doc);
+        cache.map.insert(name.clone(),doc);
 
         docs_state.borrow_mut().insert(name, DocState {
-            cache: cached,
-            read: false,
+            is_read: false,
             to_resolve: false,
         });
     }
@@ -64,11 +62,10 @@ impl RFCDepApp {
     fn refresh_docs_state(&self) {
         let mut docs_state = self.docs_state.borrow_mut();
 
-        for (name, cached) in self.cache.map.iter() {
+        for (name, _cached) in self.cache.map.iter() {
             if !docs_state.contains_key(&*name) {
                 docs_state.insert(name.clone(), DocState {
-                    cache: cached.clone(),
-                    read: false,
+                    is_read: false,
                     to_resolve: false,
                 });
             }
@@ -101,10 +98,10 @@ impl eframe::App for RFCDepApp {
                             .pick_file();
                         if let Ok(file) = File::open(path);
                         then {
-                            let mut new_cache: DocCache = serde_json::from_reader(file).unwrap();
-                            new_cache.resolve_dependencies(true, 1, false);
-                            println!("{:#?}", new_cache);
-                            self.cache = new_cache
+                            let mut new_state: DocCache = serde_json::from_reader(file).unwrap();
+                            new_state.resolve_dependencies(true, 1, false);
+                            println!("{:#?}", new_state);
+                            self.cache = new_state
                         }
                     }
 
@@ -116,9 +113,9 @@ impl eframe::App for RFCDepApp {
                             .pick_file();
                         if let Ok(file) = File::open(path);
                         then {
-                            let new_cache: DocCache = serde_json::from_reader(file).unwrap();
-                            println!("{:#?}", &new_cache);
-                            self.cache.map.extend(new_cache.map);
+                            let new_state: DocCache = serde_json::from_reader(file).unwrap();
+                            println!("{:#?}", &new_state);
+                            self.cache.map.extend(new_state.map);
                             println!("{:#?}", self.cache.map);
                         }
                     }
@@ -220,13 +217,13 @@ impl eframe::App for RFCDepApp {
                         .body(|mut body| {
                             for (name, doc) in self.docs_state.borrow_mut().iter_mut() {
                                 body.row(20.0, |mut row| {
-                                    let cache = doc.cache.borrow();
+                                    let cache = self.cache.map.get(name).unwrap();
                                     row.col(|ui| {
                                         if ui.button(format!("+ {}", cache.missing())).clicked() {
                                             doc.to_resolve = true;
                                         };
                                     });
-                                    row.col(|ui| { ui.checkbox(&mut doc.read, ""); });
+                                    row.col(|ui| { ui.checkbox(&mut doc.is_read, ""); });
                                     row.col(|ui| { name_to_href(ui, name); });
                                     row.col(|ui| { ui.label(cache.title.clone()); });
                                     row.col(|ui| { ui.label(cache.meta.len().to_string()); });
@@ -237,7 +234,7 @@ impl eframe::App for RFCDepApp {
                                                     for meta in list {
                                                         match meta {
                                                             Identifier(id) => { name_to_href(ui, id); }
-                                                            DocRef::CacheEntry(entry) => { name_to_href(ui, &entry.borrow().name.clone()); }
+                                                            DocRef::CacheEntry(id) => { name_to_href(ui, id); }
                                                         }
                                                     }
                                                 }
@@ -251,7 +248,7 @@ impl eframe::App for RFCDepApp {
                                                     for meta in list {
                                                         match meta {
                                                             Identifier(id) => { name_to_href(ui, id); }
-                                                            DocRef::CacheEntry(entry) => { name_to_href(ui, &entry.borrow().name.clone()); }
+                                                            DocRef::CacheEntry(id) => { name_to_href(ui, id); }
                                                         }
                                                     }
                                                 }
@@ -265,7 +262,7 @@ impl eframe::App for RFCDepApp {
                                                     for meta in list {
                                                         match meta {
                                                             Identifier(id) => { name_to_href(ui, id); }
-                                                            DocRef::CacheEntry(entry) => { name_to_href(ui, &entry.borrow().name.clone()); }
+                                                            DocRef::CacheEntry(id) => { name_to_href(ui, id); }
                                                         }
                                                     }
                                                 }
@@ -279,7 +276,7 @@ impl eframe::App for RFCDepApp {
                                                     for meta in list {
                                                         match meta {
                                                             Identifier(id) => { name_to_href(ui, id); }
-                                                            DocRef::CacheEntry(entry) => { name_to_href(ui, &entry.borrow().name.clone()); }
+                                                            DocRef::CacheEntry(id) => { name_to_href(ui, id); }
                                                         }
                                                     }
                                                 }
