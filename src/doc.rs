@@ -1,9 +1,11 @@
 use std::fmt;
 use regex;
 use regex::bytes::Regex;
-use crate::cache::{CachedDoc};
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
+use crate::cache::CachedDoc;
 
-#[derive(Debug, Default, Clone)]
+
+#[derive(Debug, Default, Clone, Serialize, Deserialize)]
 pub struct IetfDoc {
     pub name: String,
     pub url: String,
@@ -26,8 +28,24 @@ impl fmt::Debug for DocRef {
     }
 }
 
+impl Serialize for DocRef {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error> where S: Serializer {
+        match self {
+            DocRef::Identifier(id) => serializer.serialize_str(id),
+            DocRef::CacheEntry(cached) => serializer.serialize_str(&*cached.borrow().name)
+        }
+    }
+}
 
-#[derive(Debug, Default, Clone)]
+impl<'de> Deserialize<'de> for DocRef {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+        where
+            D: Deserializer<'de>, {
+        Ok(DocRef::Identifier(String::deserialize(deserializer)?))
+    }
+}
+
+#[derive(Debug, Default, Clone, Serialize, Deserialize)]
 pub enum Meta {
     #[default]
     None,
@@ -132,9 +150,8 @@ impl IetfDoc {
     }
 
     pub fn lookup(title: &str) -> Vec<IetfDoc> {
-
         if title.len() == 0 {
-            return vec![]
+            return vec![];
         }
 
         let query = format!("https://datatracker.ietf.org/api/v1/doc/document/?title__icontains={title}&limit=100&offset=0&name__startswith=rfc&format=json");
@@ -158,7 +175,6 @@ impl IetfDoc {
     }
 
     pub fn missing(&self) -> usize {
-
         let mut missing = 0;
         for meta in &self.meta {
             match meta {

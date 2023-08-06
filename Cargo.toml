@@ -6,10 +6,25 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+# For http queries to datatracker
 reqwest = { version = "0.11", features = ["blocking", "json"] }
 tokio = { version = "1", features = ["full"] }
+
+# For html parsing
 scraper = "0.17.1"
 regex = "1.7.0"
+
+# For document lookup using datatracker API
+# and cache (de)serializing (for saving / loading app state)
 serde_json = {version="1.0.103", features = ["raw_value"]}
+serde = {version="1.0.175", features = ["derive"]}
+
+# For gui
 eframe = "0.22.0"
+# For gui table
 egui_extras = "0.22.0"
+# For gui file dialog
+rfd = "0.11.4"
+
+# Sugar
+if_chain = "1.0.2"

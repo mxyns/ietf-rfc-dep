@@ -1,8 +1,10 @@
 use std::cell::RefCell;
 use std::collections::HashMap;
+use std::fs::File;
 use eframe::egui;
 use eframe::egui::Align;
 use egui_extras::{Column, TableBuilder};
+use if_chain::if_chain;
 use crate::doc::{DocRef, IetfDoc, Meta};
 use crate::cache::{CachedDoc, DocCache};
 use crate::doc::DocRef::Identifier;
@@ -27,10 +29,8 @@ pub struct RFCDepApp {
     cache: DocCache,
     docs_state: DocStates,
 
-
     // RFC Viewer
-    selected_tab: usize,
-    // tabs: TabbedLayout<TabItem>,
+    selected_tab: usize
 }
 
 impl RFCDepApp {
@@ -72,13 +72,68 @@ impl RFCDepApp {
                     to_resolve: false,
                 });
             }
-
         }
     }
 }
 
 impl eframe::App for RFCDepApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        egui::TopBottomPanel::top("menu").show(ctx, |ui| {
+            egui::menu::bar(ui, |ui| {
+                ui.menu_button("File", |ui| {
+                    // Save Button
+                    if_chain! {
+                        if ui.button("Save").clicked();
+                        if let Some(path) = rfd::FileDialog::new()
+                            .add_filter("json", &["json"])
+                            .save_file();
+                        if let Ok(file) = &File::create(path);
+                        then {
+                            serde_json::to_writer_pretty(file, &self.cache).unwrap();
+                        }
+                    }
+
+                    // Open Button
+                    if_chain! {
+                        if ui.button("Open").clicked();
+                        if let Some(path) = rfd::FileDialog::new()
+                            .add_filter("json", &["json"])
+                            .pick_file();
+                        if let Ok(file) = File::open(path);
+                        then {
+                            let mut new_cache: DocCache = serde_json::from_reader(file).unwrap();
+                            new_cache.resolve_dependencies(true, 1, false);
+                            println!("{:#?}", new_cache);
+                            self.cache = new_cache
+                        }
+                    }
+
+                    // Import Button
+                    if_chain! {
+                        if ui.button("Import").clicked();
+                        if let Some(path) = rfd::FileDialog::new()
+                            .add_filter("json", &["json"])
+                            .pick_file();
+                        if let Ok(file) = File::open(path);
+                        then {
+                            let new_cache: DocCache = serde_json::from_reader(file).unwrap();
+                            println!("{:#?}", &new_cache);
+                            self.cache.map.extend(new_cache.map);
+                            println!("{:#?}", self.cache.map);
+                        }
+                    }
+
+                    ui.separator();
+
+                    // Clear Button
+                    if ui.button("Clear").clicked() {
+                        self.cache.map.clear();
+                        println!("{:#?}", self.cache);
+                    }
+                });
+            });
+        });
+
         egui::SidePanel::left("search").show(ctx, |ui| {
             ui.vertical(|ui| {
                 ui.with_layout(egui::Layout::left_to_right(Align::TOP), |ui| {
@@ -174,7 +229,7 @@ impl eframe::App for RFCDepApp {
                                     row.col(|ui| { ui.checkbox(&mut doc.read, ""); });
                                     row.col(|ui| { name_to_href(ui, name); });
                                     row.col(|ui| { ui.label(cache.title.clone()); });
-                                    row.col(|ui| { ui.label(cache.meta.len().to_string() ); });
+                                    row.col(|ui| { ui.label(cache.meta.len().to_string()); });
                                     row.col(|ui| {
                                         ui.horizontal(|ui| {
                                             for meta in &cache.meta {
@@ -241,12 +296,11 @@ impl eframe::App for RFCDepApp {
             }
         });
 
+        // Resolve dependencies for docs whose "+dep" button has been clicked
         for (_, doc) in self.docs_state.borrow_mut().iter_mut() {
-            if !&doc.to_resolve { continue }
+            if !&doc.to_resolve { continue; }
 
-            let ietf_doc: IetfDoc = doc.cache.borrow().clone();
-            self.cache.resolve_dependencies(ietf_doc, true, self.max_depth);
-
+            self.cache.resolve_dependencies(true, self.max_depth, true);
             doc.to_resolve = false;
         }
 
