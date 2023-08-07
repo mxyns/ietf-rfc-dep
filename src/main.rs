@@ -4,7 +4,7 @@ mod gui;
 
 use crate::gui::{RFCDepApp};
 
-// TODO update dep count
+// TODO relation column fix wrong value
 // TODO async concurrent/parallel doc queries
 // TODO graph gui
 

@@ -6,6 +6,7 @@ use serde;
 use serde::{Deserialize, Serialize};
 
 pub trait CacheIdentifier: Eq + Hash + Ord {}
+
 impl<T> CacheIdentifier for T where T: Eq + Hash + Ord {}
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -61,7 +62,8 @@ impl<IdType: CacheIdentifier, ValueType> Cache<IdType, ValueType> {
         where
             F: FnMut(&IdType, &mut ValueType) -> bool,
     {
-        self.map.retain(f) }
+        self.map.retain(f)
+    }
 
     /* remove entry */
     pub fn remove(&mut self, id: &IdType) -> Option<ValueType> {
@@ -92,14 +94,21 @@ impl<'h, IdType: CacheIdentifier, ValueType> IntoIterator for &'h mut Cache<IdTy
 
 /* represents an entry containing references to other entries */
 pub trait RelationalEntry<IdType> {
-    fn get_relations(&self) -> HashSet<IdType>;
-    fn update_reference(&mut self, id: &IdType, is_known: impl Fn(&IdType) -> bool);
+    // must return all keys of relations still not known in cache (CacheReference::Unknown)
+    fn get_unknown_relations(&self) -> HashSet<IdType>;
+
+    // must update all unknown relations of the entry
+    // uses the callback 'is_known' to determine from within 'update_reference'
+    // if an id is now known in the calling context
+    // returns the number of new references
+    fn update_unknown_references(&mut self, is_known: impl Fn(&IdType) -> bool) -> usize;
 }
 
 /* represents an entry which value can be retrieved using only its id
  *   (eg: a document using an url, a file from its path, etc.)
  */
 pub trait ResolvableEntry<IdType> {
+    // query the entry's value from its id
     fn get_value(id: IdType) -> Self;
 }
 
@@ -112,23 +121,23 @@ impl<IdType, ValueType> Cache<IdType, ValueType>
         IdType: CacheIdentifier + Clone + fmt::Display + Debug,
         ValueType: RelationalEntry<IdType> + ResolvableEntry<IdType> + Clone + Debug
 {
-    pub fn resolve_dependencies(&mut self, print: bool, max_depth: usize, resolve: bool) {
+    pub fn resolve_dependencies<F>(&mut self, print: bool, max_depth: usize, resolve: bool, mut on_rel_change: F)
+        where
+            F: FnMut(&mut ValueType, usize) -> ()
+    {
         let mut depth = 0;
         loop {
             let mut to_update = HashSet::<IdType>::new();
 
             // Discover identifiers referenced in the cached documents
             for (_, doc) in self.into_iter() {
-                to_update.extend(doc.get_relations())
+                to_update.extend(doc.get_unknown_relations())
             }
 
             if to_update.len() == 0 {
                 if print { println!("early stop, no new entries found"); }
                 break;
             }
-
-            // println!("{:#?}", self);
-            // println!("{:#?}", to_update);
 
             // Query uncached documents
             let mut id_doc_new = HashSet::<IdType>::new();
@@ -147,19 +156,19 @@ impl<IdType, ValueType> Cache<IdType, ValueType>
                 }
             }
 
-            // println!("{:#?}", id_doc_new);
-
-            // Copy cache to lookup already existing entries when linking
+            // Copy cache keys to check which entries are new when linking
             let old_ids: HashSet<IdType> = self.map.keys().cloned().collect();
 
             // Update current cache with new entries and new relations
-            for (id, doc) in &mut self.into_iter() {
-                doc.update_reference(id, |meta_id| {
+            for (_id, doc) in &mut self.into_iter() {
+                let changed = doc.update_unknown_references(|meta_id| {
                     id_doc_new.get(meta_id).is_some() || old_ids.contains(meta_id)
                 });
-            }
 
-            // println!("{:#?}", cache);
+                if changed > 0 {
+                    on_rel_change(doc, changed);
+                }
+            }
 
             depth += 1;
 
@@ -173,7 +182,10 @@ impl<IdType, ValueType> Cache<IdType, ValueType>
         }
     }
 
-    pub fn resolve_entry_dependencies(&mut self, root: IdType, print: bool, max_depth: usize, resolve: bool) {
+    pub fn resolve_entry_dependencies<F>(&mut self, root: IdType, print: bool, max_depth: usize, resolve: bool, mut on_rel_change: F)
+        where
+            F: FnMut(&mut ValueType, usize) -> ()
+    {
         if print {
             println!("Resolving for {}", &root);
         }
@@ -186,7 +198,7 @@ impl<IdType, ValueType> Cache<IdType, ValueType>
 
             // Discover identifiers referenced in the cached documents
             for id in &updated {
-                to_update.extend(self.get(id).unwrap().get_relations())
+                to_update.extend(self.get(id).unwrap().get_unknown_relations())
             }
             updated.clear();
 
@@ -194,9 +206,6 @@ impl<IdType, ValueType> Cache<IdType, ValueType>
                 if print { println!("early stop, no new entries found"); }
                 break;
             }
-
-            // println!("{:#?}", self);
-            // println!("{:#?}", to_update);
 
             // Query uncached documents
             let mut id_doc_new = HashSet::<IdType>::new();
@@ -215,21 +224,20 @@ impl<IdType, ValueType> Cache<IdType, ValueType>
                 }
             }
 
-            // println!("id_doc_new = {:#?}", id_doc_new);
-
             // Copy cache to lookup already existing entries when linking
             let old_ids: HashSet<IdType> = self.map.keys().cloned().collect();
-            // println!("old_ids = {:#?}", old_ids);
 
             // Update current cache with new entries and new relations
             for (id, doc) in &mut self.into_iter() {
-                doc.update_reference(id, |meta_id| {
+                let changed = doc.update_unknown_references(|meta_id| {
                     id_doc_new.get(meta_id).is_some() || old_ids.contains(meta_id)
                 });
-                updated.insert(id.clone());
-            }
 
-            // println!("new_cache = {:#?}", self);
+                if changed > 0 {
+                    updated.insert(id.clone());
+                    on_rel_change(doc, changed);
+                }
+            }
 
             depth += 1;
 

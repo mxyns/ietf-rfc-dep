@@ -16,7 +16,7 @@ struct StatefulDoc {
     // Real State
     is_read: bool,
     is_selected: bool,
-    dep_count: usize,
+    missing_dep_count: usize,
 
     // Temporary State
     to_resolve: bool,
@@ -25,7 +25,7 @@ struct StatefulDoc {
 impl StatefulDoc {
     fn new(doc: IetfDoc) -> StatefulDoc {
         StatefulDoc {
-            dep_count: doc.missing(),
+            missing_dep_count: doc.missing(),
             doc,
             is_read: false,
             is_selected: false,
@@ -34,9 +34,13 @@ impl StatefulDoc {
     }
 }
 
+fn update_missing_dep_count(doc: &mut StatefulDoc, change_count: usize) {
+    doc.missing_dep_count -= change_count;
+}
+
 // Implement resolve dependency algorithms when value is IetfDoc
 impl RelationalEntry<DocIdentifier> for StatefulDoc {
-    fn get_relations(&self) -> HashSet<DocIdentifier> {
+    fn get_unknown_relations(&self) -> HashSet<DocIdentifier> {
         let mut to_update = HashSet::new();
         for meta in &self.doc.meta {
             match meta {
@@ -60,7 +64,8 @@ impl RelationalEntry<DocIdentifier> for StatefulDoc {
         to_update
     }
 
-    fn update_reference(&mut self, _id: &DocIdentifier, is_known: impl Fn(&DocIdentifier) -> bool) {
+    fn update_unknown_references(&mut self, is_known: impl Fn(&DocIdentifier) -> bool) -> usize {
+        let mut change = 0;
         for meta in &mut self.doc.meta {
             match meta {
                 Meta::Updates(list)
@@ -70,6 +75,9 @@ impl RelationalEntry<DocIdentifier> for StatefulDoc {
                     for item in list {
                         let (CacheReference::Cached(ref_id) | CacheReference::Unknown(ref_id)) = item.clone();
                         if is_known(&ref_id) {
+                            if let CacheReference::Unknown(_) = item {
+                                change += 1;
+                            }
                             *item = CacheReference::Cached(ref_id);
                         } else {
                             *item = CacheReference::Unknown(ref_id);
@@ -79,15 +87,14 @@ impl RelationalEntry<DocIdentifier> for StatefulDoc {
                 Meta::Was(_) | Meta::None => {}
             }
         }
+
+        change
     }
 }
 
 impl ResolvableEntry<DocIdentifier> for StatefulDoc {
     fn get_value(id: DocIdentifier) -> Self {
-        StatefulDoc {
-            doc: IetfDoc::from_url(format!("https://datatracker.ietf.org/doc/{}", id)),
-            ..StatefulDoc::default()
-        }
+        StatefulDoc::new(IetfDoc::from_url(format!("https://datatracker.ietf.org/doc/{}", id)))
     }
 }
 
@@ -154,7 +161,7 @@ impl eframe::App for RFCDepApp {
                         if let Ok(file) = File::open(path);
                         then {
                             let mut new_state: Cache<DocIdentifier, StatefulDoc> = serde_json::from_reader(file).unwrap();
-                            new_state.resolve_dependencies(true, 1, false);
+                            new_state.resolve_dependencies(true, 1, false, update_missing_dep_count);
                             println!("{:#?}", new_state);
                             self.cache = new_state;
                         }
@@ -171,6 +178,7 @@ impl eframe::App for RFCDepApp {
                             let new_state: Cache<DocIdentifier, StatefulDoc> = serde_json::from_reader(file).unwrap();
                             println!("{:#?}", new_state);
                             self.cache.merge_with(new_state);
+                            // TODO resolve new dependency counts too
                             println!("{:#?}", self.cache);
                         }
                     }
@@ -216,9 +224,7 @@ impl eframe::App for RFCDepApp {
                     }
 
                     if ui.button("Resolve All").clicked() {
-                        self.cache.resolve_dependencies(true, self.max_depth.clone(), true);
-                        // TODO recompute the state fields, maybe add a callback for each updated node and make resolve_dependencies call resolve_entry_dependencies
-                        // TOOD or return a list of updated nodes ids
+                        self.cache.resolve_dependencies(true, self.max_depth.clone(), true, update_missing_dep_count);
                     }
                 });
             });
@@ -320,7 +326,7 @@ impl eframe::App for RFCDepApp {
                                         }
                                     });
                                     row.col(|ui| {
-                                        let missing = &state.dep_count;
+                                        let missing = &state.missing_dep_count;
                                         if missing > &0 && ui.small_button(format!("+ {}", missing)).clicked() {
                                             state.to_resolve = true;
                                             self.cache_requires_update = true;
@@ -405,7 +411,7 @@ impl eframe::App for RFCDepApp {
                 }).cloned().collect();
 
             for to_resolve in to_resolve {
-                self.cache.resolve_entry_dependencies(to_resolve, true, self.max_depth.clone(), true);
+                self.cache.resolve_entry_dependencies(to_resolve, true, self.max_depth.clone(), true, update_missing_dep_count);
             }
 
 
