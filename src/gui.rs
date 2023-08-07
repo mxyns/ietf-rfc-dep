@@ -57,7 +57,7 @@ impl RelationalEntry<DocIdentifier> for StatefulDoc {
                         };
                     };
                 }
-                Meta::Was(_) | Meta::None => {}
+                Meta::Was(_) => {}
             }
         }
 
@@ -84,7 +84,7 @@ impl RelationalEntry<DocIdentifier> for StatefulDoc {
                         }
                     };
                 }
-                Meta::Was(_) | Meta::None => {}
+                Meta::Was(_) => {}
             }
         }
 
@@ -299,17 +299,18 @@ impl eframe::App for RFCDepApp {
                         .striped(true)
                         .vscroll(true)
                         .column(Column::initial(20.0).clip(true).resizable(true))
-                        .column(Column::initial(20.0).clip(true).resizable(true))
-                        .column(Column::initial(20.0).clip(true).resizable(true))
-                        .column(Column::initial(40.0).clip(true).resizable(true))
-                        .column(Column::initial(80.0).clip(true).resizable(true))
+                        .column(Column::initial(30.0).clip(true).resizable(true))
+                        .column(Column::initial(30.0).clip(true).resizable(true))
                         .column(Column::initial(50.0).clip(true).resizable(true))
+                        .column(Column::initial(160.0).clip(true).resizable(true))
                         .column(Column::initial(50.0).clip(true).resizable(true))
-                        .column(Column::initial(50.0).clip(true).resizable(true))
-                        .column(Column::initial(50.0).clip(true).resizable(true))
+                        .column(Column::initial(30.0).clip(true).resizable(true))
+                        .column(Column::initial(75.0).clip(true).resizable(true))
+                        .column(Column::initial(75.0).clip(true).resizable(true))
+                        .column(Column::initial(75.0).clip(true).resizable(true))
                         .column(Column::remainder())
                         .header(10.0, |mut header| {
-                            vec!["", "dep", "Read", "Name", "Title", "Relations", "Updates", "Obsoletes", "Updated By", "Obsoleted By"].drain(..).for_each(
+                            vec!["", "Missing", "Read", "Name", "Title", "Relations", "Was", "Updates", "Obsoletes", "Updated By", "Obsoleted By"].drain(..).for_each(
                                 |x| {
                                     header.col(|ui| {
                                         ui.label(x);
@@ -337,7 +338,16 @@ impl eframe::App for RFCDepApp {
                                     row.col(|ui| { ui.checkbox(&mut state.is_read, ""); });
                                     row.col(|ui| { name_to_href(ui, id); });
                                     row.col(|ui| { ui.label(doc.title.clone()); });
-                                    row.col(|ui| { ui.label(doc.meta.len().to_string()); });
+                                    row.col(|ui| { ui.label(doc.meta_count().to_string()); });
+                                    row.col(|ui| {
+                                        ui.horizontal(|ui| {
+                                            for meta in &doc.meta {
+                                                if let Meta::Was(id) = meta {
+                                                    name_to_href(ui, id);
+                                                }
+                                            }
+                                        });
+                                    });
                                     row.col(|ui| {
                                         ui.horizontal(|ui| {
                                             for meta in &doc.meta {

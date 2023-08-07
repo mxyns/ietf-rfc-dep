@@ -14,10 +14,8 @@ pub struct IetfDoc {
     pub meta: Vec<Meta>,
 }
 
-#[derive(Debug, Default, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum Meta {
-    #[default]
-    None,
     Updates(Vec<CacheReference<DocIdentifier>>),
     UpdatedBy(Vec<CacheReference<DocIdentifier>>),
     Obsoletes(Vec<CacheReference<DocIdentifier>>),
@@ -160,10 +158,27 @@ impl IetfDoc {
                         };
                     };
                 }
-                Meta::Was(_) | Meta::None => {}
+                Meta::Was(_) => {}
             }
         };
 
         missing
+    }
+
+    pub fn meta_count(&self) -> usize {
+        let mut len = 0;
+        for meta in &self.meta {
+            match meta {
+                Meta::Updates(list)
+                | Meta::Obsoletes(list)
+                | Meta::UpdatedBy(list)
+                | Meta::ObsoletedBy(list) => {
+                    len += list.len();
+                }
+                Meta::Was(_) => { len += 1 }
+            }
+        };
+
+        len
     }
 }
