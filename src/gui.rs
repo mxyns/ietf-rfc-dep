@@ -11,7 +11,7 @@ use crate::cache::{Cache, CacheReference, RelationalEntry, ResolvableEntry};
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 struct StatefulDoc {
     // Target document
-    doc: IetfDoc,
+    content: IetfDoc,
 
     // Real State
     is_read: bool,
@@ -26,7 +26,7 @@ impl StatefulDoc {
     fn new(doc: IetfDoc) -> StatefulDoc {
         StatefulDoc {
             missing_dep_count: doc.missing(),
-            doc,
+            content: doc,
             is_read: false,
             is_selected: false,
             to_resolve: false,
@@ -42,7 +42,7 @@ fn update_missing_dep_count(doc: &mut StatefulDoc, change_count: usize) {
 impl RelationalEntry<DocIdentifier> for StatefulDoc {
     fn get_unknown_relations(&self) -> HashSet<DocIdentifier> {
         let mut to_update = HashSet::new();
-        for meta in &self.doc.meta {
+        for meta in &self.content.meta {
             match meta {
                 Meta::Updates(list)
                 | Meta::Obsoletes(list)
@@ -66,7 +66,7 @@ impl RelationalEntry<DocIdentifier> for StatefulDoc {
 
     fn update_unknown_references(&mut self, is_known: impl Fn(&DocIdentifier) -> bool) -> usize {
         let mut change = 0;
-        for meta in &mut self.doc.meta {
+        for meta in &mut self.content.meta {
             match meta {
                 Meta::Updates(list)
                 | Meta::Obsoletes(list)
@@ -133,6 +133,15 @@ impl RFCDepApp {
         println!("{:#?}", self.query_result);
         println!("{:#?}", self.selected_query_docs);
     }
+
+    fn merge_caches(&mut self, other: Cache<DocIdentifier, StatefulDoc>) {
+        self.cache.merge_with(other);
+
+        // Check if import resolved some dependencies
+        // Do not query new documents, use only the already provided
+        // Max depth = 1
+        self.cache.resolve_dependencies(true, 1, false, update_missing_dep_count);
+    }
 }
 
 impl eframe::App for RFCDepApp {
@@ -177,8 +186,7 @@ impl eframe::App for RFCDepApp {
                         then {
                             let new_state: Cache<DocIdentifier, StatefulDoc> = serde_json::from_reader(file).unwrap();
                             println!("{:#?}", new_state);
-                            self.cache.merge_with(new_state);
-                            // TODO resolve new dependency counts too
+                            self.merge_caches(new_state);
                             println!("{:#?}", self.cache);
                         }
                     }
@@ -243,7 +251,7 @@ impl eframe::App for RFCDepApp {
 
                 ui.with_layout(egui::Layout::bottom_up(Align::LEFT), |ui| {
                     ui.with_layout(egui::Layout::right_to_left(Align::BOTTOM), |ui| {
-                        ui.add(egui::DragValue::new(&mut self.max_depth).suffix(" max depth").clamp_range(1..=256));
+                        ui.add(egui::DragValue::new(&mut self.max_depth).suffix(" max depth").clamp_range(std::ops::RangeInclusive::new(1, u64::MAX)));
 
                         if ui.button("include").clicked() {
                             let selected = &self.selected_query_docs;
@@ -334,7 +342,7 @@ impl eframe::App for RFCDepApp {
                                         };
                                     });
 
-                                    let doc = &state.doc;
+                                    let doc = &state.content;
                                     row.col(|ui| { ui.checkbox(&mut state.is_read, ""); });
                                     row.col(|ui| { name_to_href(ui, id); });
                                     row.col(|ui| { ui.label(doc.title.clone()); });
