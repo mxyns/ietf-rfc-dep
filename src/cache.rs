@@ -1,14 +1,16 @@
-use std::collections::{HashMap, HashSet};
-use std::collections::hash_map::Drain;
+use std::collections::{BTreeMap, HashSet};
 use std::fmt;
 use std::fmt::Debug;
 use std::hash::Hash;
 use serde;
 use serde::{Deserialize, Serialize};
 
+pub trait CacheIdentifier: Eq + Hash + Ord {}
+impl<T> CacheIdentifier for T where T: Eq + Hash + Ord {}
+
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
-pub struct Cache<IdType: Eq + Hash, ValueType> {
-    map: HashMap<IdType, ValueType>,
+pub struct Cache<IdType: CacheIdentifier, ValueType> {
+    map: BTreeMap<IdType, ValueType>,
 }
 
 #[derive(Clone, Serialize, Deserialize)]
@@ -28,7 +30,7 @@ impl<IdType: fmt::Display> Debug for CacheReference<IdType> {
 }
 
 /* Cache API */
-impl<IdType: Eq + Hash, ValueType> Cache<IdType, ValueType> {
+impl<IdType: CacheIdentifier, ValueType> Cache<IdType, ValueType> {
     /* get value with identifier id from cache */
     pub fn get(&self, id: &IdType) -> Option<&ValueType> {
         self.map.get(id)
@@ -61,11 +63,6 @@ impl<IdType: Eq + Hash, ValueType> Cache<IdType, ValueType> {
     {
         self.map.retain(f) }
 
-    /* drain all entries */
-    pub fn drain(&mut self) -> Drain<'_, IdType, ValueType> {
-        self.map.drain()
-    }
-
     /* remove entry */
     pub fn remove(&mut self, id: &IdType) -> Option<ValueType> {
         self.map.remove(id)
@@ -74,9 +71,9 @@ impl<IdType: Eq + Hash, ValueType> Cache<IdType, ValueType> {
 
 
 /* allow to iter on cache reference */
-impl<'h, IdType: Eq + Hash, ValueType> IntoIterator for &'h Cache<IdType, ValueType> {
-    type Item = <&'h HashMap<IdType, ValueType> as IntoIterator>::Item;
-    type IntoIter = <&'h HashMap<IdType, ValueType> as IntoIterator>::IntoIter;
+impl<'h, IdType: CacheIdentifier, ValueType> IntoIterator for &'h Cache<IdType, ValueType> {
+    type Item = <&'h BTreeMap<IdType, ValueType> as IntoIterator>::Item;
+    type IntoIter = <&'h BTreeMap<IdType, ValueType> as IntoIterator>::IntoIter;
 
     fn into_iter(self) -> Self::IntoIter {
         (&self.map).into_iter()
@@ -84,9 +81,9 @@ impl<'h, IdType: Eq + Hash, ValueType> IntoIterator for &'h Cache<IdType, ValueT
 }
 
 /* allow to iter_mut on cache mut reference */
-impl<'h, IdType: Eq + Hash, ValueType> IntoIterator for &'h mut Cache<IdType, ValueType> {
-    type Item = <&'h mut HashMap<IdType, ValueType> as IntoIterator>::Item;
-    type IntoIter = <&'h mut HashMap<IdType, ValueType> as IntoIterator>::IntoIter;
+impl<'h, IdType: CacheIdentifier, ValueType> IntoIterator for &'h mut Cache<IdType, ValueType> {
+    type Item = <&'h mut BTreeMap<IdType, ValueType> as IntoIterator>::Item;
+    type IntoIter = <&'h mut BTreeMap<IdType, ValueType> as IntoIterator>::IntoIter;
 
     fn into_iter(self) -> Self::IntoIter {
         (&mut self.map).into_iter()
@@ -112,7 +109,7 @@ pub trait ResolvableEntry<IdType> {
  */
 impl<IdType, ValueType> Cache<IdType, ValueType>
     where
-        IdType: Eq + Hash + Clone + fmt::Display + Debug,
+        IdType: CacheIdentifier + Clone + fmt::Display + Debug,
         ValueType: RelationalEntry<IdType> + ResolvableEntry<IdType> + Clone + Debug
 {
     pub fn resolve_dependencies(&mut self, print: bool, max_depth: usize, resolve: bool) {
@@ -232,7 +229,7 @@ impl<IdType, ValueType> Cache<IdType, ValueType>
                 updated.insert(id.clone());
             }
 
-            println!("new_cache = {:#?}", self);
+            // println!("new_cache = {:#?}", self);
 
             depth += 1;
 

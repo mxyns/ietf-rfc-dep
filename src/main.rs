@@ -4,7 +4,6 @@ mod gui;
 
 use crate::gui::{RFCDepApp};
 
-// TODO stabilise list by ordering by id / better datastruct for cache
 // TODO update dep count
 // TODO async concurrent/parallel doc queries
 // TODO graph gui
