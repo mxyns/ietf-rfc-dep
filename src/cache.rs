@@ -1,4 +1,5 @@
 use std::collections::{HashMap, HashSet};
+use std::collections::hash_map::Drain;
 use std::fmt;
 use std::fmt::Debug;
 use std::hash::Hash;
@@ -58,7 +59,11 @@ impl<IdType: Eq + Hash, ValueType> Cache<IdType, ValueType> {
         where
             F: FnMut(&IdType, &mut ValueType) -> bool,
     {
-        self.map.retain(f)
+        self.map.retain(f) }
+
+    /* drain all entries */
+    pub fn drain(&mut self) -> Drain<'_, IdType, ValueType> {
+        self.map.drain()
     }
 
     /* remove entry */

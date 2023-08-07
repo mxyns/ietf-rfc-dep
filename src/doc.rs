@@ -1,8 +1,7 @@
-use std::collections::HashSet;
 use regex;
 use regex::bytes::Regex;
 use serde::{Deserialize, Serialize};
-use crate::cache::{CacheReference, RelationalEntry, ResolvableEntry};
+use crate::cache::{CacheReference};
 
 /* Identify IETF documents by String (internal name) for now */
 pub type DocIdentifier = String;
@@ -166,59 +165,5 @@ impl IetfDoc {
         };
 
         missing
-    }
-}
-
-// Implement resolve dependency algorithms when value is IetfDoc
-impl RelationalEntry<DocIdentifier> for IetfDoc {
-    fn get_relations(&self) -> HashSet<DocIdentifier> {
-        let mut to_update = HashSet::new();
-        for meta in &self.meta {
-            match meta {
-                Meta::Updates(list)
-                | Meta::Obsoletes(list)
-                | Meta::UpdatedBy(list)
-                | Meta::ObsoletedBy(list) => {
-                    for item in list {
-                        match item {
-                            CacheReference::Unknown(id) => {
-                                to_update.insert(id.clone());
-                            }
-                            CacheReference::Cached(_) => {}
-                        };
-                    };
-                }
-                Meta::Was(_) | Meta::None => {}
-            }
-        }
-
-        to_update
-    }
-
-    fn update_reference(&mut self, _id: &DocIdentifier, is_known: impl Fn(&DocIdentifier) -> bool) {
-        for meta in &mut self.meta {
-            match meta {
-                Meta::Updates(list)
-                | Meta::Obsoletes(list)
-                | Meta::UpdatedBy(list)
-                | Meta::ObsoletedBy(list) => {
-                    for item in list {
-                        let (CacheReference::Cached(ref_id) | CacheReference::Unknown(ref_id)) = item.clone();
-                        if is_known(&ref_id) {
-                            *item = CacheReference::Cached(ref_id);
-                        } else {
-                            *item = CacheReference::Unknown(ref_id);
-                        }
-                    };
-                }
-                Meta::Was(_) | Meta::None => {}
-            }
-        }
-    }
-}
-
-impl ResolvableEntry<DocIdentifier> for IetfDoc {
-    fn get_value(id: DocIdentifier) -> Self {
-        IetfDoc::from_url(format!("https://datatracker.ietf.org/doc/{}", id))
     }
 }

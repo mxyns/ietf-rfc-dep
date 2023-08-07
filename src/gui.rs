@@ -1,24 +1,95 @@
-use std::collections::HashMap;
+use std::collections::{HashSet};
 use std::fs::File;
 use eframe::egui;
 use eframe::egui::Align;
 use egui_extras::{Column, TableBuilder};
 use if_chain::if_chain;
+use serde::{Deserialize, Serialize};
 use crate::doc::{DocIdentifier, IetfDoc, Meta};
-use crate::cache::{Cache, CacheReference};
+use crate::cache::{Cache, CacheReference, RelationalEntry, ResolvableEntry};
 
-#[derive(Clone, Debug, Default)]
-struct DocState {
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+struct StatefulDoc {
+    // Target document
+    doc: IetfDoc,
+
     // Real State
     is_read: bool,
     is_selected: bool,
+    dep_count: usize,
 
     // Temporary State
-    is_removed: bool,
     to_resolve: bool,
 }
 
-type DocStates = HashMap<DocIdentifier, DocState>;
+impl StatefulDoc {
+    fn new(doc: IetfDoc) -> StatefulDoc {
+        StatefulDoc {
+            dep_count: doc.missing(),
+            doc,
+            is_read: false,
+            is_selected: false,
+            to_resolve: false,
+        }
+    }
+}
+
+// Implement resolve dependency algorithms when value is IetfDoc
+impl RelationalEntry<DocIdentifier> for StatefulDoc {
+    fn get_relations(&self) -> HashSet<DocIdentifier> {
+        let mut to_update = HashSet::new();
+        for meta in &self.doc.meta {
+            match meta {
+                Meta::Updates(list)
+                | Meta::Obsoletes(list)
+                | Meta::UpdatedBy(list)
+                | Meta::ObsoletedBy(list) => {
+                    for item in list {
+                        match item {
+                            CacheReference::Unknown(id) => {
+                                to_update.insert(id.clone());
+                            }
+                            CacheReference::Cached(_) => {}
+                        };
+                    };
+                }
+                Meta::Was(_) | Meta::None => {}
+            }
+        }
+
+        to_update
+    }
+
+    fn update_reference(&mut self, _id: &DocIdentifier, is_known: impl Fn(&DocIdentifier) -> bool) {
+        for meta in &mut self.doc.meta {
+            match meta {
+                Meta::Updates(list)
+                | Meta::Obsoletes(list)
+                | Meta::UpdatedBy(list)
+                | Meta::ObsoletedBy(list) => {
+                    for item in list {
+                        let (CacheReference::Cached(ref_id) | CacheReference::Unknown(ref_id)) = item.clone();
+                        if is_known(&ref_id) {
+                            *item = CacheReference::Cached(ref_id);
+                        } else {
+                            *item = CacheReference::Unknown(ref_id);
+                        }
+                    };
+                }
+                Meta::Was(_) | Meta::None => {}
+            }
+        }
+    }
+}
+
+impl ResolvableEntry<DocIdentifier> for StatefulDoc {
+    fn get_value(id: DocIdentifier) -> Self {
+        StatefulDoc {
+            doc: IetfDoc::from_url(format!("https://datatracker.ietf.org/doc/{}", id)),
+            ..StatefulDoc::default()
+        }
+    }
+}
 
 #[derive(Default, Debug)]
 pub struct RFCDepApp {
@@ -31,8 +102,8 @@ pub struct RFCDepApp {
     max_depth: usize,
 
     // Doc State
-    cache: Cache<DocIdentifier, IetfDoc>,
-    docs_state: DocStates,
+    cache: Cache<DocIdentifier, StatefulDoc>,
+    cache_requires_update: bool,
     list_selected_count: isize,
 
     // RFC Viewer
@@ -48,35 +119,12 @@ impl RFCDepApp {
         app
     }
 
-    fn put_doc(cache: &mut Cache<String, IetfDoc>, docs_state: &mut DocStates, doc: IetfDoc) {
-        let name = doc.name.clone();
-        cache.cache(name.clone(), doc);
-
-        docs_state.insert(name, DocState::default());
-    }
-
     fn query_docs(&mut self) {
         self.query_result = IetfDoc::lookup(self.search_query.as_str());
         self.selected_query_docs = vec![false; self.query_result.len()];
 
         println!("{:#?}", self.query_result);
         println!("{:#?}", self.selected_query_docs);
-    }
-
-    fn refresh_docs_state(&mut self) {
-
-        /* remove cache entries marked as removed after a "remove selected" */
-        self.docs_state.iter()
-            .filter(|(id, doc)| doc.is_removed)
-            .for_each(|(id, _doc)| { self.cache.remove(id); });
-        self.docs_state.retain(|id, doc| { !doc.is_removed.clone() });
-
-        /* make new DocState for new Docs in cache */
-        for (id, _cached) in self.cache.into_iter() {
-            if !self.docs_state.contains_key(id) {
-                self.docs_state.insert(id.clone(), DocState::default());
-            }
-        }
     }
 }
 
@@ -105,11 +153,10 @@ impl eframe::App for RFCDepApp {
                             .pick_file();
                         if let Ok(file) = File::open(path);
                         then {
-                            let mut new_state: Cache<DocIdentifier, IetfDoc> = serde_json::from_reader(file).unwrap();
+                            let mut new_state: Cache<DocIdentifier, StatefulDoc> = serde_json::from_reader(file).unwrap();
                             new_state.resolve_dependencies(true, 1, false);
                             println!("{:#?}", new_state);
-                            self.cache = new_state
-                            self.refresh_docs_state();
+                            self.cache = new_state;
                         }
                     }
 
@@ -121,7 +168,7 @@ impl eframe::App for RFCDepApp {
                             .pick_file();
                         if let Ok(file) = File::open(path);
                         then {
-                            let new_state: Cache<DocIdentifier, IetfDoc> = serde_json::from_reader(file).unwrap();
+                            let new_state: Cache<DocIdentifier, StatefulDoc> = serde_json::from_reader(file).unwrap();
                             println!("{:#?}", new_state);
                             self.cache.merge_with(new_state);
                             println!("{:#?}", self.cache);
@@ -140,39 +187,38 @@ impl eframe::App for RFCDepApp {
                 ui.add_enabled_ui(self.list_selected_count > 0, |ui| {
                     ui.menu_button("Select", |ui| {
                         if ui.button("Select All").clicked() {
-                           self.docs_state.iter_mut().for_each(|(_,state)| {
-                               state.is_selected = true;
-                               self.list_selected_count += 1;
-                           });
+                            (&mut self.cache).into_iter().for_each(|(_, state)| {
+                                state.is_selected = true;
+                                self.list_selected_count += 1;
+                            });
                         }
                         if ui.button("Deselect All").clicked() {
-                           self.docs_state.iter_mut().for_each(|(_,state)| {
-                               state.is_selected = false;
-                               self.list_selected_count -= 1;
-                           });
+                            (&mut self.cache).into_iter().for_each(|(_, state)| {
+                                state.is_selected = false;
+                                self.list_selected_count -= 1;
+                            });
                         }
 
                         if ui.button("Remove selected").clicked() {
-                            self.docs_state.iter_mut()
-                                .filter(|(_,state)|  state.is_selected)
-                                .for_each(|(_,state)|  {
-                                   state.is_removed = true
-                                });
+                            self.cache.retain(|_, state| state.is_selected == false);
                         }
                     });
                 });
 
                 ui.menu_button("Resolve", |ui| {
                     if ui.button("Resolve Selected").clicked() {
-                        for (id, doc) in &self.docs_state {
+                        for (_id, doc) in (&mut self.cache).into_iter() {
                             if doc.is_selected {
-                                self.cache.resolve_entry_dependencies(id.clone(), false, self.max_depth.clone(), true);
+                                doc.to_resolve = true;
+                                self.cache_requires_update = true;
                             }
                         }
                     }
 
                     if ui.button("Resolve All").clicked() {
                         self.cache.resolve_dependencies(true, self.max_depth.clone(), true);
+                        // TODO recompute the state fields, maybe add a callback for each updated node and make resolve_dependencies call resolve_entry_dependencies
+                        // TOOD or return a list of updated nodes ids
                     }
                 });
             });
@@ -194,11 +240,14 @@ impl eframe::App for RFCDepApp {
                         ui.add(egui::DragValue::new(&mut self.max_depth).suffix(" max depth").clamp_range(1..=256));
 
                         if ui.button("include").clicked() {
-                            self.selected_query_docs.iter().enumerate()
+                            let selected = &self.selected_query_docs;
+                            let mut results: Vec<IetfDoc> = selected.iter().enumerate()
                                 .filter_map(|(i, b)| if *b { Some(i) } else { None })
-                                .map(|i| self.query_result.get(i).unwrap())
-                                .cloned()
-                                .for_each(|doc| { RFCDepApp::put_doc(&mut self.cache, &mut self.docs_state, doc); })
+                                .map(|i| self.query_result.get(i).unwrap().clone()).collect();
+
+                            results.drain(..).for_each(|doc| {
+                                self.cache.cache(doc.name.clone(), StatefulDoc::new(doc));
+                            });
                         }
                     });
 
@@ -263,27 +312,29 @@ impl eframe::App for RFCDepApp {
                             );
                         })
                         .body(|mut body| {
-                            for (name, doc) in self.docs_state.iter_mut() {
-                                let cached = self.cache.get(name).unwrap();
+                            for (id, state) in (&mut self.cache).into_iter() {
                                 body.row(20.0, |mut row| {
                                     row.col(|ui| {
-                                        if ui.checkbox(&mut doc.is_selected, "").clicked() {
-                                            self.list_selected_count += if doc.is_selected.clone() { 1 } else { -1 };
+                                        if ui.checkbox(&mut state.is_selected, "").clicked() {
+                                            self.list_selected_count += if state.is_selected.clone() { 1 } else { -1 };
                                         }
                                     });
                                     row.col(|ui| {
-                                        let missing = cached.missing();
-                                        if missing > 0 && ui.small_button(format!("+ {}", missing)).clicked() {
-                                            doc.to_resolve = true;
+                                        let missing = &state.dep_count;
+                                        if missing > &0 && ui.small_button(format!("+ {}", missing)).clicked() {
+                                            state.to_resolve = true;
+                                            self.cache_requires_update = true;
                                         };
                                     });
-                                    row.col(|ui| { ui.checkbox(&mut doc.is_read, ""); });
-                                    row.col(|ui| { name_to_href(ui, name); });
-                                    row.col(|ui| { ui.label(cached.title.clone()); });
-                                    row.col(|ui| { ui.label(cached.meta.len().to_string()); });
+
+                                    let doc = &state.doc;
+                                    row.col(|ui| { ui.checkbox(&mut state.is_read, ""); });
+                                    row.col(|ui| { name_to_href(ui, id); });
+                                    row.col(|ui| { ui.label(doc.title.clone()); });
+                                    row.col(|ui| { ui.label(doc.meta.len().to_string()); });
                                     row.col(|ui| {
                                         ui.horizontal(|ui| {
-                                            for meta in &cached.meta {
+                                            for meta in &doc.meta {
                                                 if let Meta::Updates(list) = meta {
                                                     for meta in list {
                                                         match meta {
@@ -297,7 +348,7 @@ impl eframe::App for RFCDepApp {
                                     });
                                     row.col(|ui| {
                                         ui.horizontal(|ui| {
-                                            for meta in &cached.meta {
+                                            for meta in &doc.meta {
                                                 if let Meta::Obsoletes(list) = meta {
                                                     for meta in list {
                                                         match meta {
@@ -311,7 +362,7 @@ impl eframe::App for RFCDepApp {
                                     });
                                     row.col(|ui| {
                                         ui.horizontal(|ui| {
-                                            for meta in &cached.meta {
+                                            for meta in &doc.meta {
                                                 if let Meta::UpdatedBy(list) = meta {
                                                     for meta in list {
                                                         match meta {
@@ -325,7 +376,7 @@ impl eframe::App for RFCDepApp {
                                     });
                                     row.col(|ui| {
                                         ui.horizontal(|ui| {
-                                            for meta in &cached.meta {
+                                            for meta in &doc.meta {
                                                 if let Meta::ObsoletedBy(list) = meta {
                                                     for meta in list {
                                                         match meta {
@@ -347,15 +398,19 @@ impl eframe::App for RFCDepApp {
             }
         });
 
-        // Resolve dependencies for docs whose "+dep" button has been clicked
-        for (id, doc) in self.docs_state.iter_mut() {
-            if !&doc.to_resolve { continue; }
+        if self.cache_requires_update {
+            let to_resolve: Vec<DocIdentifier> = self.cache.into_iter()
+                .filter_map(|(id, state)| {
+                    if state.to_resolve { Some(id) } else { None }
+                }).cloned().collect();
 
-            self.cache.resolve_entry_dependencies(id.clone(), true, self.max_depth.clone(), true);
-            doc.to_resolve = false;
+            for to_resolve in to_resolve {
+                self.cache.resolve_entry_dependencies(to_resolve, true, self.max_depth.clone(), true);
+            }
+
+
+            self.cache_requires_update = false;
         }
-
-        self.refresh_docs_state();
     }
 }
 
