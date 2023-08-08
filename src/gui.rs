@@ -142,15 +142,18 @@ impl RFCDepApp {
 
     fn merge_caches(&mut self, other: Cache<DocIdentifier, StatefulDoc>) {
         self.cache.merge_with(other);
-        self.update_cache()
+        self.update_cache(None);
     }
 
 
-    fn update_cache(&mut self) {
+    fn update_cache(&mut self, new_cache: Option<Cache<DocIdentifier, StatefulDoc>>) {
         // Check if import resolved some dependencies
         // Do not query new documents, use only the already provided
         // Max depth = 1
-        self.cache.resolve_dependencies(true, 1, false, update_missing_dep_count);
+        if let Some(new_cache) = new_cache {
+            self.cache = new_cache;
+        }
+        self.cache.resolve_all_dependencies(true, 1, false, update_missing_dep_count);
     }
 
     fn reset(&mut self) {
@@ -162,6 +165,21 @@ impl RFCDepApp {
 
 impl eframe::App for RFCDepApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+
+        let confirm_clear = egui_modal::Modal::new(ctx, "confirm_clear")
+            .with_close_on_outside_click(false);
+        confirm_clear.show(|ui| {
+            confirm_clear.title(ui, "Confirm Clear");
+            confirm_clear.body_and_icon(ui, "Clearing the current state will result in loss of any unsaved change", egui_modal::Icon::Warning);
+            confirm_clear.buttons(ui, |ui| {
+                if confirm_clear.caution_button(ui, "cancel").clicked() { confirm_clear.close() }
+                if confirm_clear.suggested_button(ui, "clear").clicked() {
+                    self.reset();
+                    println!("{:#?}", self.cache);
+                };
+            });
+        });
+
         egui::TopBottomPanel::top("menu").show(ctx, |ui| {
             egui::menu::bar(ui, |ui| {
                 ui.menu_button("File", |ui| {
@@ -173,10 +191,9 @@ impl eframe::App for RFCDepApp {
                             .pick_file();
                         if let Ok(file) = File::open(path);
                         then {
-                            let mut new_state: Cache<DocIdentifier, StatefulDoc> = serde_json::from_reader(file).unwrap();
-                            new_state.resolve_dependencies(true, 1, false, update_missing_dep_count);
-                            println!("{:#?}", new_state);
-                            self.cache = new_state;
+                            self.update_cache(Some(
+                                serde_json::from_reader(file).unwrap()
+                            ));
                         }
                     }
 
@@ -211,8 +228,7 @@ impl eframe::App for RFCDepApp {
 
                     // Clear Button
                     if ui.button("Clear").clicked() {
-                        self.reset();
-                        println!("{:#?}", self.cache);
+                        confirm_clear.open();
                     }
                 });
 
@@ -239,7 +255,7 @@ impl eframe::App for RFCDepApp {
                         ui.add_enabled_ui(self.list_selected_count > 0, |ui| {
                             if ui.button("Remove selected").clicked() {
                                 self.cache.retain(|_, state| state.is_selected == false);
-                                self.update_cache();
+                                self.update_cache(None);
                                 self.list_selected_count = 0;
                             }
                         });
@@ -262,7 +278,7 @@ impl eframe::App for RFCDepApp {
                         });
 
                         if ui.button("Resolve All").clicked() {
-                            self.cache.resolve_dependencies(true, self.max_depth.clone(), true, update_missing_dep_count);
+                            self.cache.resolve_all_dependencies(true, self.max_depth.clone(), true, update_missing_dep_count);
                         }
                     });
                 });

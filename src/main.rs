@@ -4,7 +4,6 @@ mod gui;
 
 use crate::gui::{RFCDepApp};
 
-// TODO confirm dialog for clear
 // TODO async concurrent/parallel doc queries
 // TODO graph gui
 

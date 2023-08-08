@@ -117,6 +117,32 @@ pub trait ResolvableEntry<IdType> {
     fn get_value(id: IdType) -> Self;
 }
 
+impl<IdType, ValueType> Cache<IdType, ValueType>
+    where
+        IdType: CacheIdentifier + Clone + fmt::Display + Debug,
+        ValueType: ResolvableEntry<IdType> + Clone + Debug {
+    /* query values from ids and cache the queried values */
+    fn query_values(&mut self, ids: impl IntoIterator<Item=IdType>) -> HashSet<IdType> {
+
+        // Query uncached documents
+        let mut id_doc_new = HashSet::new();
+        for id in ids {
+
+            // Filter out the ones that are already cached
+            if self.has_id(&id) {
+                continue;
+            }
+
+            // Query document and cache them
+            let doc = ValueType::get_value(id.clone());
+            id_doc_new.insert(id.clone());
+            self.cache(id, doc);
+        }
+
+        id_doc_new
+    }
+}
+
 /* resolve all dependencies in the cache
  * values must have relations to others (dependencies)
  * and must be resolvable to get (at least) their own dependencies
@@ -126,86 +152,60 @@ impl<IdType, ValueType> Cache<IdType, ValueType>
         IdType: CacheIdentifier + Clone + fmt::Display + Debug,
         ValueType: RelationalEntry<IdType> + ResolvableEntry<IdType> + Clone + Debug
 {
-    pub fn resolve_dependencies<F>(&mut self, print: bool, max_depth: usize, resolve: bool, mut on_rel_change: F)
+    #[inline(always)]
+    pub fn resolve_all_dependencies<F>(&mut self,
+                                       print: bool,
+                                       max_depth: usize,
+                                       resolve: bool,
+                                       on_rel_change: F)
         where
             F: FnMut(&mut ValueType, isize) -> ()
     {
-        let mut depth = 0;
-        loop {
-            let mut to_update = HashSet::<IdType>::new();
-
-            // Discover identifiers referenced in the cached documents
-            for (_, doc) in self.into_iter() {
-                to_update.extend(doc.get_unknown_relations())
-            }
-
-            if to_update.len() == 0 {
-                if print { println!("early stop, no new entries found"); }
-                break;
-            }
-
-            // Query uncached documents
-            let mut id_doc_new = HashSet::<IdType>::new();
-            if resolve {
-                for id in to_update {
-
-                    // Filter out the ones that are already cached
-                    if self.has_id(&id) {
-                        continue;
-                    }
-
-                    // Query document and cache them
-                    let doc = ValueType::get_value(id.clone());
-                    self.cache(id.clone(), doc);
-                    id_doc_new.insert(id.clone());
-                }
-            }
-
-            // Copy cache keys to check which entries are new when linking
-            let old_ids: HashSet<IdType> = self.map.keys().cloned().collect();
-
-            // Update current cache with new entries and new relations
-            for (_id, doc) in &mut self.into_iter() {
-                let changed = doc.update_unknown_references(|meta_id| {
-                    id_doc_new.get(meta_id).is_some() || old_ids.contains(meta_id)
-                });
-
-                if changed != 0 {
-                    on_rel_change(doc, changed);
-                }
-            }
-
-            depth += 1;
-
-            if print {
-                println!("Depth = {depth}");
-            }
-            if depth >= max_depth {
-                println!("Reached max depth = {max_depth}");
-                break;
-            }
-        }
+        self.resolve_dependencies(None, print, max_depth, resolve, on_rel_change);
     }
 
-    pub fn resolve_entry_dependencies<F>(&mut self, root: IdType, print: bool, max_depth: usize, resolve: bool, mut on_rel_change: F)
+    #[inline(always)]
+    pub fn resolve_entry_dependencies<F>(&mut self, root: IdType,
+                                         print: bool,
+                                         max_depth: usize,
+                                         resolve: bool,
+                                         on_rel_change: F)
+        where
+            F: FnMut(&mut ValueType, isize) -> ()
+    {
+        self.resolve_dependencies(Some(root), print, max_depth, resolve, on_rel_change);
+    }
+
+    pub fn resolve_dependencies<F>(&mut self, root: Option<IdType>,
+                                         print: bool,
+                                         max_depth: usize,
+                                         resolve: bool,
+                                         mut on_rel_change: F)
         where
             F: FnMut(&mut ValueType, isize) -> ()
     {
         if print {
-            println!("Resolving for {}", &root);
+            println!("Resolving for {:#?}", &root);
         }
 
         let mut depth = 0;
-        let mut updated = HashSet::<IdType>::from([root]);
+        let mut last_updated_opt = root.map(|root| HashSet::from([root]));
 
         loop {
             let mut to_update = HashSet::<IdType>::new();
 
             // Discover identifiers referenced in the cached documents
-            for id in &updated {
-                to_update.extend(self.get(id).unwrap().get_unknown_relations())
+            if last_updated_opt.is_none() {
+                for (_, doc) in self.into_iter() {
+                    to_update.extend(doc.get_unknown_relations())
+                }
+            } else {
+                let last_updated = last_updated_opt.as_mut().unwrap();
+                for id in &*last_updated {
+                    to_update.extend(self.get(id).unwrap().get_unknown_relations())
+                }
+                last_updated.clear();
             }
-            updated.clear();
 
             if to_update.len() == 0 {
                 if print { println!("early stop, no new entries found"); }
@@ -213,21 +213,11 @@ impl<IdType, ValueType> Cache<IdType, ValueType>
             }
 
             // Query uncached documents
-            let mut id_doc_new = HashSet::<IdType>::new();
-            if resolve {
-                for id in to_update {
-
-                    // Filter out the ones that are already cached
-                    if self.has_id(&id) {
-                        continue;
-                    }
-
-                    // Query document and cache them
-                    let doc = ValueType::get_value(id.clone());
-                    self.cache(id.clone(), doc);
-                    id_doc_new.insert(id.clone());
-                }
-            }
+            let id_doc_new = if resolve {
+                self.query_values(to_update)
+            } else {
+                HashSet::<IdType>::new()
+            };
 
             // Copy cache to lookup already existing entries when linking
             let old_ids: HashSet<IdType> = self.map.keys().cloned().collect();
@@ -239,7 +229,11 @@ impl<IdType, ValueType> Cache<IdType, ValueType>
                 });
 
                 if changed != 0 {
-                    updated.insert(id.clone());
+                    last_updated_opt.as_mut().map(|last_updated| {
+                        last_updated.insert(id.clone());
+                        last_updated
+                    });
+
                     on_rel_change(doc, changed);
                 }
             }

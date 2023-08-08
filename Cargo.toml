@@ -25,6 +25,8 @@ eframe = "0.22.0"
 egui_extras = "0.22.0"
 # For gui file dialog
 rfd = "0.11.4"
+# For yes/no modals
+egui-modal = "0.2.4"
 
 # Sugar
 if_chain = "1.0.2"
