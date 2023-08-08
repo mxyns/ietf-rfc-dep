@@ -111,7 +111,7 @@ pub struct RFCDepApp {
     // Doc State
     cache: Cache<DocIdentifier, StatefulDoc>,
     cache_requires_update: bool,
-    list_selected_count: isize,
+    list_selected_count: usize,
 
     // RFC Viewer
     selected_tab: usize,
@@ -211,8 +211,8 @@ impl eframe::App for RFCDepApp {
                         if ui.button("Deselect All").clicked() {
                             (&mut self.cache).into_iter().for_each(|(_, state)| {
                                 state.is_selected = false;
-                                self.list_selected_count -= 1;
                             });
+                            self.list_selected_count = 0;
                         }
 
                         if ui.button("Remove selected").clicked() {
@@ -331,7 +331,11 @@ impl eframe::App for RFCDepApp {
                                 body.row(20.0, |mut row| {
                                     row.col(|ui| {
                                         if ui.checkbox(&mut state.is_selected, "").clicked() {
-                                            self.list_selected_count += if state.is_selected.clone() { 1 } else { -1 };
+                                            if state.is_selected.clone() {
+                                                self.list_selected_count += 1
+                                            } else {
+                                                self.list_selected_count -= 1
+                                            }
                                         }
                                     });
                                     row.col(|ui| {
