@@ -205,8 +205,8 @@ impl eframe::App for RFCDepApp {
                         if ui.button("Select All").clicked() {
                             (&mut self.cache).into_iter().for_each(|(_, state)| {
                                 state.is_selected = true;
-                                self.list_selected_count += 1;
                             });
+                            self.list_selected_count = self.cache.len();
                         }
                         if ui.button("Deselect All").clicked() {
                             (&mut self.cache).into_iter().for_each(|(_, state)| {

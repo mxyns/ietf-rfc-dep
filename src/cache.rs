@@ -65,6 +65,11 @@ impl<IdType: CacheIdentifier, ValueType> Cache<IdType, ValueType> {
         self.map.retain(f)
     }
 
+    /* returns number of cache entries */
+    pub fn len(&self) -> usize {
+        self.map.len()
+    }
+
     /* remove entry */
     pub fn remove(&mut self, id: &IdType) -> Option<ValueType> {
         self.map.remove(id)
