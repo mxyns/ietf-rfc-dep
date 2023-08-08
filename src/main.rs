@@ -4,7 +4,7 @@ mod gui;
 
 use crate::gui::{RFCDepApp};
 
-// TODO removing docs should run resolve again
+// TODO confirm dialog for clear
 // TODO async concurrent/parallel doc queries
 // TODO graph gui
 

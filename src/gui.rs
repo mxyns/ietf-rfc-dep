@@ -34,8 +34,8 @@ impl StatefulDoc {
     }
 }
 
-fn update_missing_dep_count(doc: &mut StatefulDoc, change_count: usize) {
-    doc.missing_dep_count -= change_count;
+fn update_missing_dep_count(doc: &mut StatefulDoc, new_deps: isize) {
+    doc.missing_dep_count = (doc.missing_dep_count as isize - new_deps) as usize;
 }
 
 // Implement resolve dependency algorithms when value is IetfDoc
@@ -64,7 +64,7 @@ impl RelationalEntry<DocIdentifier> for StatefulDoc {
         to_update
     }
 
-    fn update_unknown_references(&mut self, is_known: impl Fn(&DocIdentifier) -> bool) -> usize {
+    fn update_unknown_references(&mut self, is_known: impl Fn(&DocIdentifier) -> bool) -> isize {
         let mut change = 0;
         for meta in &mut self.content.meta {
             match meta {
@@ -74,13 +74,19 @@ impl RelationalEntry<DocIdentifier> for StatefulDoc {
                 | Meta::ObsoletedBy(list) => {
                     for item in list {
                         let (CacheReference::Cached(ref_id) | CacheReference::Unknown(ref_id)) = item.clone();
-                        if is_known(&ref_id) {
-                            if let CacheReference::Unknown(_) = item {
+                        let is_known = is_known(&ref_id);
+
+                        // was unknown
+                        if let CacheReference::Unknown(_) = item {
+                            if is_known {
                                 change += 1;
+                                *item = CacheReference::Cached(ref_id);
                             }
-                            *item = CacheReference::Cached(ref_id);
-                        } else {
-                            *item = CacheReference::Unknown(ref_id);
+                        } else { // was known
+                            if !is_known {
+                                change -= 1;
+                                *item = CacheReference::Unknown(ref_id);
+                            }
                         }
                     };
                 }
@@ -136,11 +142,21 @@ impl RFCDepApp {
 
     fn merge_caches(&mut self, other: Cache<DocIdentifier, StatefulDoc>) {
         self.cache.merge_with(other);
+        self.update_cache()
+    }
 
+
+    fn update_cache(&mut self) {
         // Check if import resolved some dependencies
         // Do not query new documents, use only the already provided
         // Max depth = 1
         self.cache.resolve_dependencies(true, 1, false, update_missing_dep_count);
+    }
+
+    fn reset(&mut self) {
+        self.cache.clear();
+        self.list_selected_count = 0;
+        self.cache_requires_update = false;
     }
 }
 
@@ -149,18 +165,6 @@ impl eframe::App for RFCDepApp {
         egui::TopBottomPanel::top("menu").show(ctx, |ui| {
             egui::menu::bar(ui, |ui| {
                 ui.menu_button("File", |ui| {
-                    // Save Button
-                    if_chain! {
-                        if ui.button("Save").clicked();
-                        if let Some(path) = rfd::FileDialog::new()
-                            .add_filter("json", &["json"])
-                            .save_file();
-                        if let Ok(file) = &File::create(path);
-                        then {
-                            serde_json::to_writer_pretty(file, &self.cache).unwrap();
-                        }
-                    }
-
                     // Open Button
                     if_chain! {
                         if ui.button("Open").clicked();
@@ -173,6 +177,18 @@ impl eframe::App for RFCDepApp {
                             new_state.resolve_dependencies(true, 1, false, update_missing_dep_count);
                             println!("{:#?}", new_state);
                             self.cache = new_state;
+                        }
+                    }
+
+                    // Save Button
+                    if_chain! {
+                        if ui.button("Save").clicked();
+                        if let Some(path) = rfd::FileDialog::new()
+                            .add_filter("json", &["json"])
+                            .save_file();
+                        if let Ok(file) = &File::create(path);
+                        then {
+                            serde_json::to_writer_pretty(file, &self.cache).unwrap();
                         }
                     }
 
@@ -195,45 +211,60 @@ impl eframe::App for RFCDepApp {
 
                     // Clear Button
                     if ui.button("Clear").clicked() {
-                        self.cache.clear();
+                        self.reset();
                         println!("{:#?}", self.cache);
                     }
                 });
 
-                ui.add_enabled_ui(self.list_selected_count > 0, |ui| {
+                let cache_size = self.cache.len();
+                ui.add_enabled_ui(cache_size > 0, |ui| {
                     ui.menu_button("Select", |ui| {
-                        if ui.button("Select All").clicked() {
-                            (&mut self.cache).into_iter().for_each(|(_, state)| {
-                                state.is_selected = true;
-                            });
-                            self.list_selected_count = self.cache.len();
-                        }
-                        if ui.button("Deselect All").clicked() {
-                            (&mut self.cache).into_iter().for_each(|(_, state)| {
-                                state.is_selected = false;
-                            });
-                            self.list_selected_count = 0;
-                        }
+                        ui.add_enabled_ui(self.list_selected_count < cache_size, |ui| {
+                            if ui.button("Select All").clicked() {
+                                (&mut self.cache).into_iter().for_each(|(_, state)| {
+                                    state.is_selected = true;
+                                });
+                                self.list_selected_count = self.cache.len();
+                            }
+                        });
 
-                        if ui.button("Remove selected").clicked() {
-                            self.cache.retain(|_, state| state.is_selected == false);
-                        }
+                        ui.add_enabled_ui(self.list_selected_count >= cache_size, |ui| {
+                            if ui.button("Deselect All").clicked() {
+                                (&mut self.cache).into_iter().for_each(|(_, state)| {
+                                    state.is_selected = false;
+                                });
+                                self.list_selected_count = 0;
+                            }
+                        });
+                        ui.add_enabled_ui(self.list_selected_count > 0, |ui| {
+                            if ui.button("Remove selected").clicked() {
+                                self.cache.retain(|_, state| state.is_selected == false);
+                                self.update_cache();
+                                self.list_selected_count = 0;
+                            }
+                        });
                     });
                 });
 
-                ui.menu_button("Resolve", |ui| {
-                    if ui.button("Resolve Selected").clicked() {
-                        for (_id, doc) in (&mut self.cache).into_iter() {
-                            if doc.is_selected {
-                                doc.to_resolve = true;
-                                self.cache_requires_update = true;
+                // update value since cache may have been updated
+                let cache_size = self.cache.len();
+                ui.add_enabled_ui(cache_size > 0, |ui| {
+                    ui.menu_button("Resolve", |ui| {
+                        ui.add_enabled_ui(self.list_selected_count > 0, |ui| {
+                            if ui.button("Resolve Selected").clicked() {
+                                for (_id, doc) in (&mut self.cache).into_iter() {
+                                    if doc.is_selected {
+                                        doc.to_resolve = true;
+                                        self.cache_requires_update = true;
+                                    }
+                                }
                             }
-                        }
-                    }
+                        });
 
-                    if ui.button("Resolve All").clicked() {
-                        self.cache.resolve_dependencies(true, self.max_depth.clone(), true, update_missing_dep_count);
-                    }
+                        if ui.button("Resolve All").clicked() {
+                            self.cache.resolve_dependencies(true, self.max_depth.clone(), true, update_missing_dep_count);
+                        }
+                    });
                 });
             });
         });

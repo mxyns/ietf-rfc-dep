@@ -62,7 +62,7 @@ impl<IdType: CacheIdentifier, ValueType> Cache<IdType, ValueType> {
         where
             F: FnMut(&IdType, &mut ValueType) -> bool,
     {
-        self.map.retain(f)
+        self.map.retain(f);
     }
 
     /* returns number of cache entries */
@@ -106,7 +106,7 @@ pub trait RelationalEntry<IdType> {
     // uses the callback 'is_known' to determine from within 'update_reference'
     // if an id is now known in the calling context
     // returns the number of new references
-    fn update_unknown_references(&mut self, is_known: impl Fn(&IdType) -> bool) -> usize;
+    fn update_unknown_references(&mut self, is_known: impl Fn(&IdType) -> bool) -> isize;
 }
 
 /* represents an entry which value can be retrieved using only its id
@@ -128,7 +128,7 @@ impl<IdType, ValueType> Cache<IdType, ValueType>
 {
     pub fn resolve_dependencies<F>(&mut self, print: bool, max_depth: usize, resolve: bool, mut on_rel_change: F)
         where
-            F: FnMut(&mut ValueType, usize) -> ()
+            F: FnMut(&mut ValueType, isize) -> ()
     {
         let mut depth = 0;
         loop {
@@ -170,7 +170,7 @@ impl<IdType, ValueType> Cache<IdType, ValueType>
                     id_doc_new.get(meta_id).is_some() || old_ids.contains(meta_id)
                 });
 
-                if changed > 0 {
+                if changed != 0 {
                     on_rel_change(doc, changed);
                 }
             }
@@ -189,7 +189,7 @@ impl<IdType, ValueType> Cache<IdType, ValueType>
 
     pub fn resolve_entry_dependencies<F>(&mut self, root: IdType, print: bool, max_depth: usize, resolve: bool, mut on_rel_change: F)
         where
-            F: FnMut(&mut ValueType, usize) -> ()
+            F: FnMut(&mut ValueType, isize) -> ()
     {
         if print {
             println!("Resolving for {}", &root);
@@ -238,7 +238,7 @@ impl<IdType, ValueType> Cache<IdType, ValueType>
                     id_doc_new.get(meta_id).is_some() || old_ids.contains(meta_id)
                 });
 
-                if changed > 0 {
+                if changed != 0 {
                     updated.insert(id.clone());
                     on_rel_change(doc, changed);
                 }
