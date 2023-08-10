@@ -4,6 +4,8 @@ use std::fmt::Debug;
 use std::hash::Hash;
 use serde;
 use serde::{Deserialize, Serialize};
+use rayon::prelude::*;
+
 
 pub trait CacheIdentifier: Eq + Hash + Ord {}
 
@@ -117,29 +119,26 @@ pub trait ResolvableEntry<IdType> {
     fn get_value(id: IdType) -> Self;
 }
 
+
 impl<IdType, ValueType> Cache<IdType, ValueType>
     where
-        IdType: CacheIdentifier + Clone + fmt::Display + Debug,
-        ValueType: ResolvableEntry<IdType> + Clone + Debug {
+        IdType: CacheIdentifier + Sync + Clone + fmt::Display + Debug,
+        ValueType: ResolvableEntry<IdType> + Send + Clone + Debug {
     /* query values from ids and cache the queried values */
     fn query_values(&mut self, ids: impl IntoIterator<Item=IdType>) -> HashSet<IdType> {
+        let new_ids: HashSet<IdType> = ids.into_iter()
+            .filter(|id| !self.has_id(&id))
+            .collect();
 
-        // Query uncached documents
-        let mut id_doc_new = HashSet::new();
-        for id in ids {
+        let values: Vec<_> = new_ids.par_iter().map(|id| {
+            (id, ValueType::get_value(id.clone()))
+        }).collect();
 
-            // Filter out the ones that are already cached
-            if self.has_id(&id) {
-                continue;
-            }
-
-            // Query document and cache them
-            let doc = ValueType::get_value(id.clone());
-            id_doc_new.insert(id.clone());
-            self.cache(id, doc);
+        for (id, value) in values {
+            self.cache(id.clone(), value);
         }
 
-        id_doc_new
+        new_ids
     }
 }
 
@@ -149,8 +148,8 @@ impl<IdType, ValueType> Cache<IdType, ValueType>
  */
 impl<IdType, ValueType> Cache<IdType, ValueType>
     where
-        IdType: CacheIdentifier + Clone + fmt::Display + Debug,
-        ValueType: RelationalEntry<IdType> + ResolvableEntry<IdType> + Clone + Debug
+        IdType: CacheIdentifier + Sync + Clone + fmt::Display + Debug,
+        ValueType: RelationalEntry<IdType> + Send + ResolvableEntry<IdType> + Clone + Debug
 {
     #[inline(always)]
     pub fn resolve_all_dependencies<F>(&mut self,
@@ -177,10 +176,10 @@ impl<IdType, ValueType> Cache<IdType, ValueType>
     }
 
     pub fn resolve_dependencies<F>(&mut self, root: Option<IdType>,
-                                         print: bool,
-                                         max_depth: usize,
-                                         resolve: bool,
-                                         mut on_rel_change: F)
+                                   print: bool,
+                                   max_depth: usize,
+                                   resolve: bool,
+                                   mut on_rel_change: F)
         where
             F: FnMut(&mut ValueType, isize) -> ()
     {
@@ -207,6 +206,8 @@ impl<IdType, ValueType> Cache<IdType, ValueType>
                 last_updated.clear();
             }
 
+            println!("to_update = {:#?}", to_update);
+
             if to_update.len() == 0 {
                 if print { println!("early stop, no new entries found"); }
                 break;
@@ -218,6 +219,8 @@ impl<IdType, ValueType> Cache<IdType, ValueType>
             } else {
                 HashSet::<IdType>::new()
             };
+
+            println!("resolve = {}, id_doc_new = {:#?}", resolve, id_doc_new);
 
             // Copy cache to lookup already existing entries when linking
             let old_ids: HashSet<IdType> = self.map.keys().cloned().collect();
