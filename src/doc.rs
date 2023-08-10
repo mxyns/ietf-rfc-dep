@@ -2,6 +2,7 @@ use regex;
 use regex::bytes::Regex;
 use serde::{Deserialize, Serialize};
 use crate::cache::{CacheReference};
+use rayon::prelude::*;
 
 /* Identify IETF documents by String (internal name) for now */
 pub type DocIdentifier = String;
@@ -136,7 +137,7 @@ impl IetfDoc {
 
         println!("{} matches = {:#?}", urls.len(), &urls);
 
-        urls.into_iter()
+        urls.into_par_iter()
             .map(IetfDoc::from_url)
             .collect()
     }
