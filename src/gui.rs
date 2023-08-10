@@ -479,10 +479,7 @@ impl eframe::App for RFCDepApp {
                     if state.to_resolve { Some(id) } else { None }
                 }).cloned().collect();
 
-            for to_resolve in to_resolve {
-                self.cache.resolve_entry_dependencies(to_resolve, true, self.max_depth.clone(), true, update_missing_dep_count);
-            }
-
+            self.cache.resolve_entries_dependencies(to_resolve, true, self.max_depth.clone(), true, update_missing_dep_count);
 
             self.cache_requires_update = false;
         }

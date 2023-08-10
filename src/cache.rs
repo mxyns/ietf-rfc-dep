@@ -172,10 +172,22 @@ impl<IdType, ValueType> Cache<IdType, ValueType>
         where
             F: FnMut(&mut ValueType, isize) -> ()
     {
-        self.resolve_dependencies(Some(root), print, max_depth, resolve, on_rel_change);
+        self.resolve_dependencies(Some(vec![root]), print, max_depth, resolve, on_rel_change);
     }
 
-    pub fn resolve_dependencies<F>(&mut self, root: Option<IdType>,
+    #[inline(always)]
+    pub fn resolve_entries_dependencies<F>(&mut self, roots: Vec<IdType>,
+                                         print: bool,
+                                         max_depth: usize,
+                                         resolve: bool,
+                                         on_rel_change: F)
+        where
+            F: FnMut(&mut ValueType, isize) -> ()
+    {
+        self.resolve_dependencies(Some(roots), print, max_depth, resolve, on_rel_change);
+    }
+
+    pub fn resolve_dependencies<F>(&mut self, roots_opt: Option<Vec<IdType>>,
                                    print: bool,
                                    max_depth: usize,
                                    resolve: bool,
@@ -184,11 +196,11 @@ impl<IdType, ValueType> Cache<IdType, ValueType>
             F: FnMut(&mut ValueType, isize) -> ()
     {
         if print {
-            println!("Resolving for {:#?}", &root);
+            println!("Resolving for {:#?}", roots_opt);
         }
 
         let mut depth = 0;
-        let mut last_updated_opt = root.map(|root| HashSet::from([root]));
+        let mut last_updated_opt: Option<HashSet<IdType>> = roots_opt.map(|roots| HashSet::from_iter(roots));
 
         loop {
             let mut to_update = HashSet::<IdType>::new();
@@ -206,8 +218,6 @@ impl<IdType, ValueType> Cache<IdType, ValueType>
                 last_updated.clear();
             }
 
-            println!("to_update = {:#?}", to_update);
-
             if to_update.len() == 0 {
                 if print { println!("early stop, no new entries found"); }
                 break;
@@ -219,8 +229,6 @@ impl<IdType, ValueType> Cache<IdType, ValueType>
             } else {
                 HashSet::<IdType>::new()
             };
-
-            println!("resolve = {}, id_doc_new = {:#?}", resolve, id_doc_new);
 
             // Copy cache to lookup already existing entries when linking
             let old_ids: HashSet<IdType> = self.map.keys().cloned().collect();

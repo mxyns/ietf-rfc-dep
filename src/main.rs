@@ -4,7 +4,6 @@ mod gui;
 
 use crate::gui::{RFCDepApp};
 
-// TODO resolve: pass array of roots instead of single root for multiple selection resolve
 // TODO reduce .clone on IdType
 // TODO graph gui
 
