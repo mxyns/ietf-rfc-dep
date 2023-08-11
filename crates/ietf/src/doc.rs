@@ -1,8 +1,8 @@
 use regex;
 use regex::bytes::Regex;
 use serde::{Deserialize, Serialize};
-use crate::cache::{CacheReference};
 use rayon::prelude::*;
+use rfc_dep_cache::{CacheReference};
 
 /* Identify IETF documents by String (internal name) for now */
 pub type DocIdentifier = String;

@@ -1,0 +1,26 @@
+[package]
+name = "rfc-dep-gui"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+
+# Own crates
+rfc-dep-cache = { path = "../cache" }
+rfc-dep-ietf = { path = "../ietf" }
+
+serde = {version = "1.0.175"}
+serde_json = {version = "1.0.103"}
+# For gui
+eframe = "0.22.0"
+# For gui table
+egui_extras = "0.22.0"
+# For gui file dialog
+rfd = "0.11.4"
+# For yes/no modals
+egui-modal = "0.2.4"
+
+# Sugar
+if_chain = "1.0.2"

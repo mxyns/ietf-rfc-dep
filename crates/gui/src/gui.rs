@@ -5,8 +5,8 @@ use eframe::egui::Align;
 use egui_extras::{Column, TableBuilder};
 use if_chain::if_chain;
 use serde::{Deserialize, Serialize};
-use crate::doc::{DocIdentifier, IetfDoc, Meta};
-use crate::cache::{Cache, CacheReference, RelationalEntry, ResolvableEntry, ResolveParams, ResolveTarget};
+use rfc_dep_ietf::{DocIdentifier, IetfDoc, Meta};
+use rfc_dep_cache::{Cache, CacheReference, RelationalEntry, ResolvableEntry, ResolveParams, ResolveTarget};
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 struct StatefulDoc {
