@@ -3,6 +3,7 @@ use regex::bytes::Regex;
 use serde::{Deserialize, Serialize};
 use rayon::prelude::*;
 use rfc_dep_cache::{CacheReference};
+use crate::meta::Meta;
 
 /* Identify IETF documents by String (internal name) for now */
 pub type DocIdentifier = String;
@@ -13,51 +14,6 @@ pub struct IetfDoc {
     pub url: String,
     pub title: String,
     pub meta: Vec<Meta>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub enum Meta {
-    Updates(Vec<CacheReference<DocIdentifier>>),
-    UpdatedBy(Vec<CacheReference<DocIdentifier>>),
-    Obsoletes(Vec<CacheReference<DocIdentifier>>),
-    ObsoletedBy(Vec<CacheReference<DocIdentifier>>),
-    Was(DocIdentifier),
-}
-
-impl Meta {
-    fn from_html(tyype: String, inner_text: Vec<&str>) -> Result<Meta, String> {
-        match tyype.as_str() {
-            "updated_by" => {
-                let updaters = Meta::UpdatedBy(Self::meta_array_to_doc_identifiers(inner_text));
-                Ok(updaters)
-            }
-            "updates" => {
-                let updated = Meta::Updates(Self::meta_array_to_doc_identifiers(inner_text));
-                Ok(updated)
-            }
-            "obsoletes" => {
-                let obsoleted = Meta::Obsoletes(Self::meta_array_to_doc_identifiers(inner_text));
-                Ok(obsoleted)
-            }
-            "obsoleted_by" => {
-                let obsoleters = Meta::ObsoletedBy(Self::meta_array_to_doc_identifiers(inner_text));
-                Ok(obsoleters)
-            }
-            "was" => {
-                let was = Meta::Was(inner_text[1].trim().to_string());
-                Ok(was)
-            }
-            _ => {
-                Err(format!("Unknown Type {tyype}"))
-            }
-        }
-    }
-
-    fn meta_array_to_doc_identifiers(lines: Vec<&str>) -> Vec<CacheReference<DocIdentifier>> {
-        lines.into_iter().skip(1).step_by(2).map(|x| {
-            CacheReference::Unknown(name_to_id(x))
-        }).collect()
-    }
 }
 
 pub fn name_to_id(name: &str) -> DocIdentifier {
