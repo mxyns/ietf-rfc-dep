@@ -6,7 +6,7 @@ use egui_extras::{Column, TableBuilder};
 use if_chain::if_chain;
 use serde::{Deserialize, Serialize};
 use crate::doc::{DocIdentifier, IetfDoc, Meta};
-use crate::cache::{Cache, CacheReference, RelationalEntry, ResolvableEntry};
+use crate::cache::{Cache, CacheReference, RelationalEntry, ResolvableEntry, ResolveParams, ResolveTarget};
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 struct StatefulDoc {
@@ -153,7 +153,12 @@ impl RFCDepApp {
         if let Some(new_cache) = new_cache {
             self.cache = new_cache;
         }
-        self.cache.resolve_all_dependencies(true, 1, false, update_missing_dep_count);
+
+        self.cache.resolve_dependencies(ResolveTarget::All, ResolveParams {
+            print: true,
+            depth: 1,
+            query: false,
+        }, update_missing_dep_count);
     }
 
     fn reset(&mut self) {
@@ -165,7 +170,6 @@ impl RFCDepApp {
 
 impl eframe::App for RFCDepApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-
         let confirm_clear = egui_modal::Modal::new(ctx, "confirm_clear")
             .with_close_on_outside_click(false);
         confirm_clear.show(|ui| {
@@ -278,7 +282,12 @@ impl eframe::App for RFCDepApp {
                         });
 
                         if ui.button("Resolve All").clicked() {
-                            self.cache.resolve_all_dependencies(true, self.max_depth.clone(), true, update_missing_dep_count);
+                            self.cache.resolve_dependencies(ResolveTarget::All,
+                                                            ResolveParams {
+                                                                print: true,
+                                                                depth: self.max_depth.clone(),
+                                                                query: true,
+                                                            }, update_missing_dep_count);
                         }
                     });
                 });
@@ -479,7 +488,12 @@ impl eframe::App for RFCDepApp {
                     if state.to_resolve { Some(id) } else { None }
                 }).cloned().collect();
 
-            self.cache.resolve_entries_dependencies(to_resolve, true, self.max_depth.clone(), true, update_missing_dep_count);
+            self.cache.resolve_dependencies(ResolveTarget::Multiple(to_resolve),
+                                            ResolveParams {
+                                                print: true,
+                                                depth: self.max_depth.clone(),
+                                                query: true,
+                                            }, update_missing_dep_count);
 
             self.cache_requires_update = false;
         }

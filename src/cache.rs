@@ -124,7 +124,7 @@ impl<IdType, ValueType> Cache<IdType, ValueType>
     where
         IdType: CacheIdentifier + Sync + Clone + fmt::Display + Debug,
         ValueType: ResolvableEntry<IdType> + Send + Clone + Debug {
-    /* query values from ids and cache the queried values */
+    /* query values from ids and cache_core the queried values */
     fn query_values(&mut self, ids: impl IntoIterator<Item=IdType>) -> HashSet<IdType> {
         let new_ids: HashSet<IdType> = ids.into_iter()
             .filter(|id| !self.has_id(&id))
@@ -142,6 +142,20 @@ impl<IdType, ValueType> Cache<IdType, ValueType>
     }
 }
 
+#[derive(Debug)]
+pub enum ResolveTarget<IdType> {
+    All,
+    Single(IdType),
+    Multiple(Vec<IdType>),
+}
+
+#[derive(Debug)]
+pub struct ResolveParams {
+    pub print: bool,
+    pub query: bool,
+    pub depth: usize,
+}
+
 /* resolve all dependencies in the cache
  * values must have relations to others (dependencies)
  * and must be resolvable to get (at least) their own dependencies
@@ -151,56 +165,31 @@ impl<IdType, ValueType> Cache<IdType, ValueType>
         IdType: CacheIdentifier + Sync + Clone + fmt::Display + Debug,
         ValueType: RelationalEntry<IdType> + Send + ResolvableEntry<IdType> + Clone + Debug
 {
-    #[inline(always)]
-    pub fn resolve_all_dependencies<F>(&mut self,
-                                       print: bool,
-                                       max_depth: usize,
-                                       resolve: bool,
-                                       on_rel_change: F)
-        where
-            F: FnMut(&mut ValueType, isize) -> ()
-    {
-        self.resolve_dependencies(None, print, max_depth, resolve, on_rel_change);
-    }
-
-    #[inline(always)]
-    pub fn resolve_entry_dependencies<F>(&mut self, root: IdType,
-                                         print: bool,
-                                         max_depth: usize,
-                                         resolve: bool,
-                                         on_rel_change: F)
-        where
-            F: FnMut(&mut ValueType, isize) -> ()
-    {
-        self.resolve_dependencies(Some(vec![root]), print, max_depth, resolve, on_rel_change);
-    }
-
-    #[inline(always)]
-    pub fn resolve_entries_dependencies<F>(&mut self, roots: Vec<IdType>,
-                                         print: bool,
-                                         max_depth: usize,
-                                         resolve: bool,
-                                         on_rel_change: F)
-        where
-            F: FnMut(&mut ValueType, isize) -> ()
-    {
-        self.resolve_dependencies(Some(roots), print, max_depth, resolve, on_rel_change);
-    }
-
-    pub fn resolve_dependencies<F>(&mut self, roots_opt: Option<Vec<IdType>>,
-                                   print: bool,
-                                   max_depth: usize,
-                                   resolve: bool,
+    pub fn resolve_dependencies<F>(&mut self,
+                                   target: ResolveTarget<IdType>,
+                                   params: ResolveParams,
                                    mut on_rel_change: F)
         where
             F: FnMut(&mut ValueType, isize) -> ()
     {
+        let ResolveParams {
+            print,
+            query,
+            depth: max_depth,
+        } = params;
+
+
         if print {
-            println!("Resolving for {:#?}", roots_opt);
+            println!("Resolving for {:#?} with {:#?}", target, params);
         }
 
         let mut depth = 0;
-        let mut last_updated_opt: Option<HashSet<IdType>> = roots_opt.map(|roots| HashSet::from_iter(roots));
+        let mut last_updated_opt: Option<HashSet<IdType>>;
+        last_updated_opt = match target {
+            ResolveTarget::All => { None }
+            ResolveTarget::Single(root) => { Some(HashSet::from([root])) }
+            ResolveTarget::Multiple(roots) => { Some(HashSet::from_iter(roots)) }
+        };
 
         loop {
             let mut to_update = HashSet::<IdType>::new();
@@ -224,7 +213,7 @@ impl<IdType, ValueType> Cache<IdType, ValueType>
             }
 
             // Query uncached documents
-            let id_doc_new = if resolve {
+            let id_doc_new = if query {
                 self.query_values(to_update)
             } else {
                 HashSet::<IdType>::new()
