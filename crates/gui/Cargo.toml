@@ -24,3 +24,4 @@ egui-modal = "0.2.4"
 
 # Sugar
 if_chain = "1.0.2"
+derivative = "2.2.0"

@@ -63,6 +63,16 @@ impl IetfDoc {
             }
         }
 
+        let selector = scraper::Selector::parse("tbody.meta:nth-child(1) > tr:nth-child(4) > td:nth-child(4) > a:nth-child(1)").unwrap();
+        if let Some(replaces) = document.select(&selector).next().map(|el| el.text().collect::<Vec<_>>()) {
+            let meta = Meta::from_html("replaces".to_string(), replaces);
+            if let Ok(meta) = meta {
+                doc_meta.push(meta);
+            } else {
+                println!("Meta: {}", meta.err().unwrap())
+            }
+        }
+
         let doc = IetfDoc {
             name: name_to_id(name.as_str()),
             url: url.to_string(),
@@ -73,12 +83,14 @@ impl IetfDoc {
         doc
     }
 
-    pub fn lookup(title: &str) -> Vec<IetfDoc> {
+    pub fn lookup(title: &str, limit: usize, rfc_only: bool) -> Vec<IetfDoc> {
         if title.len() == 0 {
             return vec![];
         }
 
-        let query = format!("https://datatracker.ietf.org/api/v1/doc/document/?title__icontains={title}&limit=100&offset=0&name__startswith=rfc&format=json");
+        let rfc_only = if rfc_only { "&states__in=3" } else {""};
+        let query = format!("https://datatracker.ietf.org/api/v1/doc/document/?title__icontains={title}&limit={limit}&offset=0&format=json{rfc_only}&type__in=draft");
+
         println!("query = {query}");
         let resp = reqwest::blocking::get(query).unwrap();
         let json: serde_json::Value = resp.json().unwrap();
@@ -115,7 +127,7 @@ impl IetfDoc {
                         };
                     };
                 }
-                Meta::Was(_) => {}
+                Meta::Was(_) | Meta::Replaces(_) => {}
             }
         };
 
@@ -132,7 +144,7 @@ impl IetfDoc {
                 | Meta::ObsoletedBy(list) => {
                     len += list.len();
                 }
-                Meta::Was(_) => { len += 1 }
+                Meta::Was(_) | Meta::Replaces(_) => { len += 1 }
             }
         };
 

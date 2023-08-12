@@ -58,7 +58,7 @@ impl RelationalEntry<DocIdentifier> for StatefulDoc {
                         };
                     };
                 }
-                Meta::Was(_) => {}
+                Meta::Was(_) | Meta::Replaces(_) => {}
             }
         }
 
@@ -91,7 +91,7 @@ impl RelationalEntry<DocIdentifier> for StatefulDoc {
                         }
                     };
                 }
-                Meta::Was(_) => {}
+                Meta::Was(_) | Meta::Replaces(_) => {}
             }
         }
 

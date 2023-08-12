@@ -3,6 +3,7 @@ use rfc_dep_ietf::{DocIdentifier, IetfDoc};
 use rfc_dep_cache::{Cache, ResolveParams, ResolveTarget};
 use crate::doc::{StatefulDoc, update_missing_dep_count};
 use crate::tabs::{Tab};
+use crate::settings::{Settings};
 
 #[derive(Default, Debug)]
 pub struct RFCDepApp {
@@ -12,7 +13,7 @@ pub struct RFCDepApp {
     pub(crate) selected_query_docs: Vec<bool>,
 
     // Settings
-    pub(crate) max_depth: usize,
+    pub(crate) settings: Settings,
 
     // Doc State
     pub(crate) cache: Cache<DocIdentifier, StatefulDoc>,
@@ -33,7 +34,9 @@ impl RFCDepApp {
     }
 
     pub(crate) fn query_docs(&mut self) {
-        self.query_result = IetfDoc::lookup(self.search_query.as_str());
+        self.query_result = IetfDoc::lookup(self.search_query.as_str(),
+                                            self.settings.query.limit,
+                                            self.settings.query.rfc_only);
         self.selected_query_docs = vec![false; self.query_result.len()];
 
         println!("{:#?}", self.query_result);
@@ -95,7 +98,7 @@ impl eframe::App for RFCDepApp {
             self.cache.resolve_dependencies(ResolveTarget::Multiple(to_resolve),
                                             ResolveParams {
                                                 print: true,
-                                                depth: self.max_depth.clone(),
+                                                depth: self.settings.max_depth.clone(),
                                                 query: true,
                                             }, update_missing_dep_count);
 

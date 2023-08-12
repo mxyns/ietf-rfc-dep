@@ -2,7 +2,7 @@ use eframe::egui::{Response, Ui};
 use egui_extras::{Column, TableBuilder};
 use rfc_dep_cache::CacheReference;
 use rfc_dep_ietf::{DocIdentifier, Meta};
-use crate::gui::RFCDepApp;
+use crate::app::RFCDepApp;
 
 fn name_to_href(ui: &mut Ui, s: &String) -> Response {
     ui.hyperlink_to(s, format!("https://datatracker.ietf.org/doc/{s}"))
@@ -32,9 +32,10 @@ impl RFCDepApp {
             .column(Column::initial(75.0).clip(true).resizable(true))
             .column(Column::initial(75.0).clip(true).resizable(true))
             .column(Column::initial(75.0).clip(true).resizable(true))
+            .column(Column::initial(75.0).clip(true).resizable(true))
             .column(Column::remainder())
             .header(10.0, |mut header| {
-                vec!["", "Missing", "Read", "Name", "Title", "Relations", "Was", "Updates", "Obsoletes", "Updated By", "Obsoleted By"].drain(..).for_each(
+                vec!["", "Missing", "Read", "Name", "Title", "Relations", "Was", "Replaces", "Updates", "Obsoletes", "Updated By", "Obsoleted By"].drain(..).for_each(
                     |x| {
                         header.col(|ui| {
                             ui.label(x);
@@ -55,11 +56,13 @@ impl RFCDepApp {
                             }
                         });
                         row.col(|ui| {
-                            let missing = &state.missing_dep_count;
-                            if missing > &0 && ui.small_button(format!("+ {}", missing)).clicked() {
-                                state.to_resolve = true;
-                                self.cache_requires_update = true;
-                            };
+                            ui.horizontal_centered(|ui| {
+                                let missing = &state.missing_dep_count;
+                                if missing > &0 && ui.small_button(format!("+ {}", missing)).clicked() {
+                                    state.to_resolve = true;
+                                    self.cache_requires_update = true;
+                                };
+                            });
                         });
 
                         let doc = &state.content;
@@ -71,6 +74,15 @@ impl RFCDepApp {
                             ui.horizontal(|ui| {
                                 for meta in &doc.meta {
                                     if let Meta::Was(id) = meta {
+                                        name_to_href(ui, id);
+                                    }
+                                }
+                            });
+                        });
+                        row.col(|ui| {
+                            ui.horizontal(|ui| {
+                                for meta in &doc.meta {
+                                    if let Meta::Replaces(id) = meta {
                                         name_to_href(ui, id);
                                     }
                                 }

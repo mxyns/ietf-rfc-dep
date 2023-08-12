@@ -4,7 +4,7 @@ use if_chain::if_chain;
 use rfc_dep_cache::{Cache, ResolveParams, ResolveTarget};
 use crate::doc::{update_missing_dep_count, StatefulDoc};
 use rfc_dep_ietf::{DocIdentifier};
-use crate::gui::RFCDepApp;
+use crate::app::RFCDepApp;
 use std::fs::File;
 use egui_modal::Modal;
 
@@ -110,7 +110,7 @@ impl RFCDepApp {
                         self.cache.resolve_dependencies(ResolveTarget::All,
                                                         ResolveParams {
                                                             print: true,
-                                                            depth: self.max_depth.clone(),
+                                                            depth: self.settings.max_depth.clone(),
                                                             query: true,
                                                         }, update_missing_dep_count);
                     }

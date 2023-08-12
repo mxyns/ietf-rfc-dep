@@ -1,12 +1,13 @@
-use crate::gui::RFCDepApp;
+use crate::app::RFCDepApp;
 use eframe;
 
-mod gui;
+mod app;
 mod doc;
 mod tabs;
 mod menubar;
 mod sidebar;
 mod table_view;
+mod settings;
 
 fn main() {
     let options = eframe::NativeOptions {

@@ -2,7 +2,7 @@ use eframe::egui;
 use eframe::egui::{Align, Ui};
 use rfc_dep_ietf::IetfDoc;
 use crate::doc::StatefulDoc;
-use crate::gui::RFCDepApp;
+use crate::app::RFCDepApp;
 
 impl RFCDepApp {
     pub(crate) fn make_sidebar(&mut self, ui: &mut Ui) {
@@ -13,12 +13,14 @@ impl RFCDepApp {
                     || ui.button("lookup").clicked() {
                     self.query_docs();
                 }
+
+                self.make_query_settings_ui(ui);
             });
             ui.end_row();
 
             ui.with_layout(egui::Layout::bottom_up(Align::LEFT), |ui| {
                 ui.with_layout(egui::Layout::right_to_left(Align::BOTTOM), |ui| {
-                    ui.add(egui::DragValue::new(&mut self.max_depth).suffix(" max depth").clamp_range(std::ops::RangeInclusive::new(1, u64::MAX)));
+                    ui.add(egui::DragValue::new(&mut self.settings.max_depth).suffix(" max depth").clamp_range(std::ops::RangeInclusive::new(1, u64::MAX)));
 
                     if ui.button("include").clicked() {
                         let selected = &self.selected_query_docs;

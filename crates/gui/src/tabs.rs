@@ -1,6 +1,6 @@
 use eframe::egui;
 use eframe::egui::{Align, Ui};
-use crate::gui::RFCDepApp;
+use crate::app::RFCDepApp;
 
 pub(crate) struct Tabs;
 

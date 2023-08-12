@@ -8,6 +8,7 @@ pub enum Meta {
     UpdatedBy(Vec<CacheReference<DocIdentifier>>),
     Obsoletes(Vec<CacheReference<DocIdentifier>>),
     ObsoletedBy(Vec<CacheReference<DocIdentifier>>),
+    Replaces(DocIdentifier),
     Was(DocIdentifier),
 }
 
@@ -33,6 +34,11 @@ impl Meta {
             "was" => {
                 let was = Meta::Was(inner_text[1].trim().to_string());
                 Ok(was)
+            }
+            "replaces" => {
+                println!("{:#?}", inner_text);
+                let replaced = Meta::Replaces(inner_text[0].trim().to_string());
+                Ok(replaced)
             }
             _ => {
                 Err(format!("Unknown Type {tyype}"))
