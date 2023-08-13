@@ -1,7 +1,7 @@
-use std::fmt::Debug;
-use crate::{DocIdentifier};
-use serde::{Serialize, Deserialize};
+use crate::DocIdentifier;
 use serde::de::DeserializeOwned;
+use serde::{Deserialize, Serialize};
+use std::fmt::Debug;
 
 pub trait IdContainer {
     type Holder<T>: Serialize + DeserializeOwned + Send + Debug + Clone;
@@ -11,7 +11,9 @@ pub trait IdContainer {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum Meta<C>
-    where C: IdContainer {
+where
+    C: IdContainer,
+{
     Updates(Vec<C::Holder<DocIdentifier>>),
     UpdatedBy(Vec<C::Holder<DocIdentifier>>),
     Obsoletes(Vec<C::Holder<DocIdentifier>>),
@@ -21,7 +23,8 @@ pub enum Meta<C>
 }
 
 impl<T> Meta<T>
-    where T: IdContainer
+where
+    T: IdContainer,
 {
     pub fn from_html(tyype: String, inner_text: Vec<&str>) -> Result<Meta<T>, String> {
         match tyype.as_str() {
@@ -50,10 +53,7 @@ impl<T> Meta<T>
                 let replaced = Meta::Replaces(inner_text[0].trim().to_string());
                 Ok(replaced)
             }
-            _ => {
-                Err(format!("Unknown Type {tyype}"))
-            }
+            _ => Err(format!("Unknown Type {tyype}")),
         }
     }
-
 }

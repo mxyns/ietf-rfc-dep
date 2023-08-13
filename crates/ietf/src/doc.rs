@@ -1,19 +1,18 @@
-use std::fmt::Debug;
-use regex;
+use crate::meta::Meta;
+use crate::IdContainer;
+use rayon::prelude::*;
 use regex::bytes::Regex;
 use serde::{Deserialize, Serialize};
-use rayon::prelude::*;
-use crate::IdContainer;
-use crate::meta::Meta;
+use std::fmt::Debug;
 
 /* Identify IETF documents by String (internal name) for now */
 pub type DocIdentifier = String;
 
-
 #[derive(Debug, Default, Clone, Serialize, Deserialize)]
 // C represents the container type used to hold document references
 pub struct IetfDoc<C>
-where C: IdContainer
+where
+    C: IdContainer,
 {
     pub name: String,
     pub url: String,
@@ -22,11 +21,12 @@ where C: IdContainer
 }
 
 pub fn name_to_id(name: &str) -> DocIdentifier {
-    name.to_string().replace(" ", "").to_lowercase()
+    name.to_string().replace(' ', "").to_lowercase()
 }
 
 impl<C> IetfDoc<C>
-where C: IdContainer
+where
+    C: IdContainer,
 {
     pub fn from_url(url: String) -> IetfDoc<C> {
         let resp = reqwest::blocking::get(&*url).unwrap();
@@ -51,7 +51,7 @@ where C: IdContainer
         for item in meta_elems {
             let inner_text = item.text().collect::<Vec<_>>();
             // Skip empty items
-            if inner_text.len() == 0 {
+            if inner_text.is_empty() {
                 continue;
             }
 
@@ -61,7 +61,6 @@ where C: IdContainer
             let tyype = regex.replace_all(tyype.as_bytes(), "_".as_bytes()).to_vec();
             let tyype = String::from_utf8(tyype).unwrap();
 
-
             let meta = Meta::from_html(tyype, inner_text);
             if let Ok(meta) = meta {
                 doc_meta.push(meta);
@@ -70,8 +69,15 @@ where C: IdContainer
             }
         }
 
-        let selector = scraper::Selector::parse("tbody.meta:nth-child(1) > tr:nth-child(4) > td:nth-child(4) > a:nth-child(1)").unwrap();
-        if let Some(replaces) = document.select(&selector).next().map(|el| el.text().collect::<Vec<_>>()) {
+        let selector = scraper::Selector::parse(
+            "tbody.meta:nth-child(1) > tr:nth-child(4) > td:nth-child(4) > a:nth-child(1)",
+        )
+        .unwrap();
+        if let Some(replaces) = document
+            .select(&selector)
+            .next()
+            .map(|el| el.text().collect::<Vec<_>>())
+        {
             let meta = Meta::from_html("replaces".to_string(), replaces);
             if let Ok(meta) = meta {
                 doc_meta.push(meta);
@@ -91,7 +97,7 @@ where C: IdContainer
     }
 
     pub fn lookup(title: &str, limit: usize, rfc_only: bool) -> Vec<IetfDoc<C>> {
-        if title.len() == 0 {
+        if title.is_empty() {
             return vec![];
         }
 
@@ -102,19 +108,20 @@ where C: IdContainer
         let resp = reqwest::blocking::get(query).unwrap();
         let json: serde_json::Value = resp.json().unwrap();
 
-        let urls: Vec<String> = json.get("objects").unwrap().as_array().unwrap().iter()
-            .map(|obj| obj.get("name"))
-            .flatten()
-            .map(serde_json::Value::as_str)
-            .flatten()
+        let urls: Vec<String> = json
+            .get("objects")
+            .unwrap()
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter_map(|obj| obj.get("name"))
+            .filter_map(serde_json::Value::as_str)
             .map(|name| format!("https://datatracker.ietf.org/doc/{name}"))
             .collect();
 
         println!("{} matches = {:#?}", urls.len(), &urls);
 
-        urls.into_par_iter()
-            .map(IetfDoc::from_url)
-            .collect()
+        urls.into_par_iter().map(IetfDoc::from_url).collect()
     }
 
     pub fn meta_count(&self) -> usize {
@@ -127,9 +134,9 @@ where C: IdContainer
                 | Meta::ObsoletedBy(list) => {
                     len += list.len();
                 }
-                Meta::Was(_) | Meta::Replaces(_) => { len += 1 }
+                Meta::Was(_) | Meta::Replaces(_) => len += 1,
             }
-        };
+        }
 
         len
     }

@@ -1,14 +1,14 @@
 use eframe::egui;
 use eframe::egui::{Context, Ui};
+use egui_modal::Modal;
 use if_chain::if_chain;
 use std::fs::File;
-use egui_modal::Modal;
 
 use rfc_dep_cache::{ResolveParams, ResolveTarget};
 
-use crate::doc::{update_missing_dep_count};
-use crate::cache::{DocCache};
 use crate::app::RFCDepApp;
+use crate::cache::DocCache;
+use crate::doc::update_missing_dep_count;
 
 impl RFCDepApp {
     pub(crate) fn make_menu(&mut self, ui: &mut Ui, confirm_clear: Modal) {
@@ -16,44 +16,44 @@ impl RFCDepApp {
             ui.menu_button("File", |ui| {
                 // Open Button
                 if_chain! {
-                        if ui.button("Open").clicked();
-                        if let Some(path) = rfd::FileDialog::new()
-                            .add_filter("json", &["json"])
-                            .pick_file();
-                        if let Ok(file) = File::open(path);
-                        then {
-                            self.update_cache(Some(
-                                serde_json::from_reader(file).unwrap()
-                            ));
-                        }
+                    if ui.button("Open").clicked();
+                    if let Some(path) = rfd::FileDialog::new()
+                        .add_filter("json", &["json"])
+                        .pick_file();
+                    if let Ok(file) = File::open(path);
+                    then {
+                        self.update_cache(Some(
+                            serde_json::from_reader(file).unwrap()
+                        ));
                     }
+                }
 
                 // Save Button
                 if_chain! {
-                        if ui.button("Save").clicked();
-                        if let Some(path) = rfd::FileDialog::new()
-                            .add_filter("json", &["json"])
-                            .save_file();
-                        if let Ok(file) = &File::create(path);
-                        then {
-                            serde_json::to_writer_pretty(file, &self.cache).unwrap();
-                        }
+                    if ui.button("Save").clicked();
+                    if let Some(path) = rfd::FileDialog::new()
+                        .add_filter("json", &["json"])
+                        .save_file();
+                    if let Ok(file) = &File::create(path);
+                    then {
+                        serde_json::to_writer_pretty(file, &self.cache).unwrap();
                     }
+                }
 
                 // Import Button
                 if_chain! {
-                        if ui.button("Import").clicked();
-                        if let Some(path) = rfd::FileDialog::new()
-                            .add_filter("json", &["json"])
-                            .pick_file();
-                        if let Ok(file) = File::open(path);
-                        then {
-                            let new_state: DocCache = serde_json::from_reader(file).unwrap();
-                            println!("{:#?}", new_state);
-                            self.merge_caches(new_state);
-                            println!("{:#?}", self.cache);
-                        }
+                    if ui.button("Import").clicked();
+                    if let Some(path) = rfd::FileDialog::new()
+                        .add_filter("json", &["json"])
+                        .pick_file();
+                    if let Ok(file) = File::open(path);
+                    then {
+                        let new_state: DocCache = serde_json::from_reader(file).unwrap();
+                        println!("{:#?}", new_state);
+                        self.merge_caches(new_state);
+                        println!("{:#?}", self.cache);
                     }
+                }
 
                 ui.separator();
 
@@ -85,7 +85,7 @@ impl RFCDepApp {
                     });
                     ui.add_enabled_ui(self.list_selected_count > 0, |ui| {
                         if ui.button("Remove selected").clicked() {
-                            self.cache.retain(|_, state| state.is_selected == false);
+                            self.cache.retain(|_, state| !state.is_selected);
                             self.update_cache(None);
                             self.list_selected_count = 0;
                         }
@@ -109,12 +109,15 @@ impl RFCDepApp {
                     });
 
                     if ui.button("Resolve All").clicked() {
-                        self.cache.resolve_dependencies(ResolveTarget::All,
-                                                        ResolveParams {
-                                                            print: true,
-                                                            depth: self.settings.max_depth.clone(),
-                                                            query: true,
-                                                        }, update_missing_dep_count);
+                        self.cache.resolve_dependencies(
+                            ResolveTarget::All,
+                            ResolveParams {
+                                print: true,
+                                depth: self.settings.max_depth,
+                                query: true,
+                            },
+                            update_missing_dep_count,
+                        );
                     }
                 });
             });
@@ -122,13 +125,18 @@ impl RFCDepApp {
     }
 
     pub(crate) fn make_clear_confirm_dialog(&mut self, ctx: &Context) -> Modal {
-        let modal = Modal::new(ctx, "confirm_clear")
-            .with_close_on_outside_click(false);
+        let modal = Modal::new(ctx, "confirm_clear").with_close_on_outside_click(false);
         modal.show(|ui| {
             modal.title(ui, "Confirm Clear");
-            modal.body_and_icon(ui, "Clearing the current state will result in loss of any unsaved change", egui_modal::Icon::Warning);
+            modal.body_and_icon(
+                ui,
+                "Clearing the current state will result in loss of any unsaved change",
+                egui_modal::Icon::Warning,
+            );
             modal.buttons(ui, |ui| {
-                if modal.caution_button(ui, "cancel").clicked() { modal.close() }
+                if modal.caution_button(ui, "cancel").clicked() {
+                    modal.close()
+                }
                 if modal.suggested_button(ui, "clear").clicked() {
                     self.reset();
                     println!("{:#?}", self.cache);

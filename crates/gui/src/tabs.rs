@@ -1,15 +1,12 @@
+use crate::app::RFCDepApp;
 use eframe::egui;
 use eframe::egui::{Align, Ui};
-use crate::app::RFCDepApp;
 
 pub(crate) struct Tabs;
 
 impl Tabs {
     pub(crate) fn all() -> Vec<Tab> {
-        vec![
-            Tab::Table,
-            Tab::Graph,
-        ]
+        vec![Tab::Table, Tab::Graph]
     }
 }
 
@@ -45,10 +42,14 @@ impl Tab {
     pub(crate) fn make_tab_ui(&self, app: &mut RFCDepApp, ui: &mut Ui) {
         match self {
             Tab::Table => {
-                if ui.button("list").clicked() { app.selected_tab = Tab::Table; }
+                if ui.button("list").clicked() {
+                    app.selected_tab = Tab::Table;
+                }
             }
             Tab::Graph => {
-                if ui.button("graph").clicked() { app.selected_tab = Tab::Graph; }
+                if ui.button("graph").clicked() {
+                    app.selected_tab = Tab::Graph;
+                }
             }
         }
     }

@@ -1,9 +1,9 @@
 /* represents an entry containing references to other entries */
+use crate::{Cache, CacheIdentifier};
+use rayon::prelude::*;
 use std::collections::HashSet;
 use std::fmt;
 use std::fmt::Debug;
-use crate::{Cache, CacheIdentifier};
-use rayon::prelude::*;
 
 pub trait RelationalEntry<IdType> {
     // must return all keys of relations still not known in cache (CacheReference::Unknown)
@@ -26,20 +26,19 @@ pub trait ResolvableEntry<IdType> {
     fn get_value(id: IdType) -> Self;
 }
 
-
 impl<IdType, ValueType> Cache<IdType, ValueType>
-    where
-        IdType: CacheIdentifier + Sync + Clone + fmt::Display + Debug,
-        ValueType: ResolvableEntry<IdType> + Send + Clone + Debug {
+where
+    IdType: CacheIdentifier + Sync + Clone + fmt::Display + Debug,
+    ValueType: ResolvableEntry<IdType> + Send + Clone + Debug,
+{
     /* query values from ids and cache_core the queried values */
-    fn query_values(&mut self, ids: impl IntoIterator<Item=IdType>) -> HashSet<IdType> {
-        let new_ids: HashSet<IdType> = ids.into_iter()
-            .filter(|id| !self.has_id(&id))
-            .collect();
+    fn query_values(&mut self, ids: impl IntoIterator<Item = IdType>) -> HashSet<IdType> {
+        let new_ids: HashSet<IdType> = ids.into_iter().filter(|id| !self.has_id(id)).collect();
 
-        let values: Vec<_> = new_ids.par_iter().map(|id| {
-            (id, ValueType::get_value(id.clone()))
-        }).collect();
+        let values: Vec<_> = new_ids
+            .par_iter()
+            .map(|id| (id, ValueType::get_value(id.clone())))
+            .collect();
 
         for (id, value) in values {
             self.cache(id.clone(), value);
@@ -68,23 +67,23 @@ pub struct ResolveParams {
  * and must be resolvable to get (at least) their own dependencies
  */
 impl<IdType, ValueType> Cache<IdType, ValueType>
-    where
-        IdType: CacheIdentifier + Sync + Clone + fmt::Display + Debug,
-        ValueType: RelationalEntry<IdType> + Send + ResolvableEntry<IdType> + Clone + Debug
+where
+    IdType: CacheIdentifier + Sync + Clone + fmt::Display + Debug,
+    ValueType: RelationalEntry<IdType> + Send + ResolvableEntry<IdType> + Clone + Debug,
 {
-    pub fn resolve_dependencies<F>(&mut self,
-                                   target: ResolveTarget<IdType>,
-                                   params: ResolveParams,
-                                   mut on_rel_change: F)
-        where
-            F: FnMut(&mut ValueType, isize) -> ()
+    pub fn resolve_dependencies<F>(
+        &mut self,
+        target: ResolveTarget<IdType>,
+        params: ResolveParams,
+        mut on_rel_change: F,
+    ) where
+        F: FnMut(&mut ValueType, isize),
     {
         let ResolveParams {
             print,
             query,
             depth: max_depth,
         } = params;
-
 
         if print {
             println!("Resolving for {:#?} with {:#?}", target, params);
@@ -93,9 +92,9 @@ impl<IdType, ValueType> Cache<IdType, ValueType>
         let mut depth = 0;
         let mut last_updated_opt: Option<HashSet<IdType>>;
         last_updated_opt = match target {
-            ResolveTarget::All => { None }
-            ResolveTarget::Single(root) => { Some(HashSet::from([root])) }
-            ResolveTarget::Multiple(roots) => { Some(HashSet::from_iter(roots)) }
+            ResolveTarget::All => None,
+            ResolveTarget::Single(root) => Some(HashSet::from([root])),
+            ResolveTarget::Multiple(roots) => Some(HashSet::from_iter(roots)),
         };
 
         loop {
@@ -114,8 +113,10 @@ impl<IdType, ValueType> Cache<IdType, ValueType>
                 last_updated.clear();
             }
 
-            if to_update.len() == 0 {
-                if print { println!("early stop, no new entries found"); }
+            if to_update.is_empty() {
+                if print {
+                    println!("early stop, no new entries found");
+                }
                 break;
             }
 

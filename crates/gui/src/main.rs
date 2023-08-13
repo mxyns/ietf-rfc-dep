@@ -1,19 +1,23 @@
 use crate::app::RFCDepApp;
-use eframe;
 
 mod app;
+mod cache;
 mod doc;
-mod tabs;
 mod menubar;
+mod settings;
 mod sidebar;
 mod table_view;
-mod settings;
-mod cache;
+mod tabs;
 
 fn main() {
     let options = eframe::NativeOptions {
         centered: true,
         ..Default::default()
     };
-    eframe::run_native("rfc-dep", options, Box::new(|cc| Box::new(RFCDepApp::new(cc)))).unwrap()
+    eframe::run_native(
+        "rfc-dep",
+        options,
+        Box::new(|cc| Box::new(RFCDepApp::new(cc))),
+    )
+    .unwrap()
 }

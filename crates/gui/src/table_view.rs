@@ -1,9 +1,9 @@
+use crate::app::RFCDepApp;
+use crate::doc::DocReference;
 use eframe::egui::{Response, Ui};
 use egui_extras::{Column, TableBuilder};
 use rfc_dep_cache::CacheReference;
-use rfc_dep_ietf::{Meta};
-use crate::app::RFCDepApp;
-use crate::doc::DocReference;
+use rfc_dep_ietf::Meta;
 
 fn name_to_href(ui: &mut Ui, s: &String) -> Response {
     ui.hyperlink_to(s, format!("https://datatracker.ietf.org/doc/{s}"))
@@ -12,8 +12,12 @@ fn name_to_href(ui: &mut Ui, s: &String) -> Response {
 fn list_meta_links(ui: &mut Ui, list: &Vec<DocReference>) {
     for meta in list {
         match meta {
-            DocReference(CacheReference::Unknown(id)) => { name_to_href(ui, id); }
-            DocReference(CacheReference::Cached(id)) => { name_to_href(ui, id); }
+            DocReference(CacheReference::Unknown(id)) => {
+                name_to_href(ui, id);
+            }
+            DocReference(CacheReference::Cached(id)) => {
+                name_to_href(ui, id);
+            }
         }
     }
 }
@@ -36,20 +40,33 @@ impl RFCDepApp {
             .column(Column::initial(75.0).clip(true).resizable(true))
             .column(Column::remainder())
             .header(10.0, |mut header| {
-                vec!["", "Missing", "Read", "Name", "Title", "Relations", "Was", "Replaces", "Updates", "Obsoletes", "Updated By", "Obsoleted By"].drain(..).for_each(
-                    |x| {
-                        header.col(|ui| {
-                            ui.label(x);
-                        });
-                    }
-                );
+                vec![
+                    "",
+                    "Missing",
+                    "Read",
+                    "Name",
+                    "Title",
+                    "Relations",
+                    "Was",
+                    "Replaces",
+                    "Updates",
+                    "Obsoletes",
+                    "Updated By",
+                    "Obsoleted By",
+                ]
+                .drain(..)
+                .for_each(|x| {
+                    header.col(|ui| {
+                        ui.label(x);
+                    });
+                });
             })
             .body(|mut body| {
                 for (id, state) in (&mut self.cache).into_iter() {
                     body.row(20.0, |mut row| {
                         row.col(|ui| {
                             if ui.checkbox(&mut state.is_selected, "").clicked() {
-                                if state.is_selected.clone() {
+                                if state.is_selected {
                                     self.list_selected_count += 1
                                 } else {
                                     self.list_selected_count -= 1
@@ -59,7 +76,9 @@ impl RFCDepApp {
                         row.col(|ui| {
                             ui.horizontal_centered(|ui| {
                                 let missing = &state.missing_dep_count;
-                                if missing > &0 && ui.small_button(format!("+ {}", missing)).clicked() {
+                                if missing > &0
+                                    && ui.small_button(format!("+ {}", missing)).clicked()
+                                {
                                     state.to_resolve = true;
                                     self.cache_requires_update = true;
                                 };
@@ -67,10 +86,18 @@ impl RFCDepApp {
                         });
 
                         let doc = &state.content;
-                        row.col(|ui| { ui.checkbox(&mut state.is_read, ""); });
-                        row.col(|ui| { name_to_href(ui, id); });
-                        row.col(|ui| { ui.label(doc.title.clone()); });
-                        row.col(|ui| { ui.label(doc.meta_count().to_string()); });
+                        row.col(|ui| {
+                            ui.checkbox(&mut state.is_read, "");
+                        });
+                        row.col(|ui| {
+                            name_to_href(ui, id);
+                        });
+                        row.col(|ui| {
+                            ui.label(doc.title.clone());
+                        });
+                        row.col(|ui| {
+                            ui.label(doc.meta_count().to_string());
+                        });
                         row.col(|ui| {
                             ui.horizontal(|ui| {
                                 for meta in &doc.meta {

@@ -1,12 +1,12 @@
 use eframe::egui;
 
-use rfc_dep_ietf::{DocIdentifier, IetfDoc};
 use rfc_dep_cache::{ResolveParams, ResolveTarget};
+use rfc_dep_ietf::{DocIdentifier, IetfDoc};
 
-use crate::doc::{DocReference, update_missing_dep_count};
-use crate::tabs::{Tab};
-use crate::settings::{Settings};
-use crate::cache::{DocCache};
+use crate::cache::DocCache;
+use crate::doc::{update_missing_dep_count, DocReference};
+use crate::settings::Settings;
+use crate::tabs::Tab;
 
 #[derive(Default, Debug)]
 pub struct RFCDepApp {
@@ -31,11 +31,7 @@ pub struct RFCDepApp {
 
 impl RFCDepApp {
     pub(crate) fn new(_cc: &eframe::CreationContext<'_>) -> Self {
-        let app = RFCDepApp {
-            ..Self::default()
-        };
-
-        app
+        RFCDepApp { ..Self::default() }
     }
 
     pub(crate) fn reset(&mut self) {
@@ -64,17 +60,22 @@ impl eframe::App for RFCDepApp {
         });
 
         if self.cache_requires_update {
-            let to_resolve: Vec<DocIdentifier> = self.cache.into_iter()
-                .filter_map(|(id, state)| {
-                    if state.to_resolve { Some(id) } else { None }
-                }).cloned().collect();
+            let to_resolve: Vec<DocIdentifier> = self
+                .cache
+                .into_iter()
+                .filter_map(|(id, state)| if state.to_resolve { Some(id) } else { None })
+                .cloned()
+                .collect();
 
-            self.cache.resolve_dependencies(ResolveTarget::Multiple(to_resolve),
-                                            ResolveParams {
-                                                print: true,
-                                                depth: self.settings.max_depth.clone(),
-                                                query: true,
-                                            }, update_missing_dep_count);
+            self.cache.resolve_dependencies(
+                ResolveTarget::Multiple(to_resolve),
+                ResolveParams {
+                    print: true,
+                    depth: self.settings.max_depth,
+                    query: true,
+                },
+                update_missing_dep_count,
+            );
 
             self.cache_requires_update = false;
         }

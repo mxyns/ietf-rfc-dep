@@ -1,8 +1,8 @@
-use std::collections::{BTreeMap};
+use serde::{Deserialize, Serialize};
+use std::collections::BTreeMap;
 use std::fmt;
 use std::fmt::Debug;
 use std::hash::Hash;
-use serde::{Deserialize, Serialize};
 
 pub trait CacheIdentifier: Eq + Hash + Ord {}
 
@@ -14,9 +14,11 @@ pub struct Cache<IdType: CacheIdentifier, ValueType> {
 }
 
 impl<IdType: CacheIdentifier, ValueType> Default for Cache<IdType, ValueType> {
-    fn default() -> Self { Cache {
-        map: BTreeMap::default()
-    } }
+    fn default() -> Self {
+        Cache {
+            map: BTreeMap::default(),
+        }
+    }
 }
 
 #[derive(Clone, Serialize, Deserialize)]
@@ -29,8 +31,12 @@ pub enum CacheReference<IdType> {
 impl<IdType: fmt::Display> Debug for CacheReference<IdType> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            CacheReference::Unknown(id) => { write!(f, "Unknown(\"{}\")", id) }
-            CacheReference::Cached(id) => { write!(f, "Cached(\"{}\")", id) }
+            CacheReference::Unknown(id) => {
+                write!(f, "Unknown(\"{}\")", id)
+            }
+            CacheReference::Cached(id) => {
+                write!(f, "Cached(\"{}\")", id)
+            }
         }
     }
 }
@@ -64,8 +70,8 @@ impl<IdType: CacheIdentifier, ValueType> Cache<IdType, ValueType> {
 
     /* retain only entries matching f */
     pub fn retain<F>(&mut self, f: F)
-        where
-            F: FnMut(&IdType, &mut ValueType) -> bool,
+    where
+        F: FnMut(&IdType, &mut ValueType) -> bool,
     {
         self.map.retain(f);
     }
@@ -74,6 +80,10 @@ impl<IdType: CacheIdentifier, ValueType> Cache<IdType, ValueType> {
     pub fn len(&self) -> usize {
         self.map.len()
     }
+    /* returns number of cache entries */
+    pub fn is_empty(&self) -> bool {
+        self.map.is_empty()
+    }
 
     /* remove entry */
     pub fn remove(&mut self, id: &IdType) -> Option<ValueType> {
@@ -81,14 +91,13 @@ impl<IdType: CacheIdentifier, ValueType> Cache<IdType, ValueType> {
     }
 }
 
-
 /* allow to into_iter on cache reference */
 impl<'h, IdType: CacheIdentifier, ValueType> IntoIterator for &'h Cache<IdType, ValueType> {
     type Item = <&'h BTreeMap<IdType, ValueType> as IntoIterator>::Item;
     type IntoIter = <&'h BTreeMap<IdType, ValueType> as IntoIterator>::IntoIter;
 
     fn into_iter(self) -> Self::IntoIter {
-        (&self.map).into_iter()
+        self.map.iter()
     }
 }
 
@@ -98,6 +107,6 @@ impl<'h, IdType: CacheIdentifier, ValueType> IntoIterator for &'h mut Cache<IdTy
     type IntoIter = <&'h mut BTreeMap<IdType, ValueType> as IntoIterator>::IntoIter;
 
     fn into_iter(self) -> Self::IntoIter {
-        (&mut self.map).into_iter()
+        self.map.iter_mut()
     }
 }

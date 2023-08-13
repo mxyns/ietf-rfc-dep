@@ -1,12 +1,12 @@
+use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
+
 use rfc_dep_cache::{CacheReference, RelationalEntry, ResolvableEntry};
-use rfc_dep_ietf::{DocIdentifier, IdContainer, IetfDoc, Meta, name_to_id};
-use serde::{Serialize, Deserialize};
+use rfc_dep_ietf::{name_to_id, DocIdentifier, IdContainer, IetfDoc, Meta};
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 /* Type Wrapper needed because CacheReference is from rfc_dep_cache
- * and IdContainer is from rfc_dep_doc
- */
+ * and IdContainer is from rfc_dep_doc */
 pub struct DocReference(pub CacheReference<DocIdentifier>);
 
 /* make DocReference an IdContainer to allow it to be contained in IetfDoc::Meta */
@@ -14,9 +14,12 @@ impl IdContainer for DocReference {
     type Holder<T> = DocReference;
 
     fn from_inner_text(lines: Vec<&str>) -> Vec<Self::Holder<DocIdentifier>> {
-        lines.into_iter().skip(1).step_by(2).map(|x| {
-            DocReference(CacheReference::Unknown(name_to_id(x)))
-        }).collect()
+        lines
+            .into_iter()
+            .skip(1)
+            .step_by(2)
+            .map(|x| DocReference(CacheReference::Unknown(name_to_id(x))))
+            .collect()
     }
 }
 
@@ -52,12 +55,15 @@ impl StatefulDoc {
 
 impl ResolvableEntry<DocIdentifier> for StatefulDoc {
     fn get_value(id: DocIdentifier) -> Self {
-        StatefulDoc::new(IetfDoc::from_url(format!("https://datatracker.ietf.org/doc/{}", id)))
+        StatefulDoc::new(IetfDoc::from_url(format!(
+            "https://datatracker.ietf.org/doc/{}",
+            id
+        )))
     }
 }
 
 pub(crate) fn update_missing_dep_count(doc: &mut StatefulDoc, new_deps: isize) {
-    doc.missing_dep_count = (doc.missing_dep_count.clone() as isize - new_deps) as usize;
+    doc.missing_dep_count = (doc.missing_dep_count as isize - new_deps) as usize;
 }
 
 // Implement resolve dependency algorithms when value is IetfDoc
@@ -77,7 +83,7 @@ impl RelationalEntry<DocIdentifier> for StatefulDoc {
                             }
                             DocReference(CacheReference::Cached(_)) => {}
                         };
-                    };
+                    }
                 }
                 Meta::Was(_) | Meta::Replaces(_) => {}
             }
@@ -105,13 +111,14 @@ impl RelationalEntry<DocIdentifier> for StatefulDoc {
                                 change += 1;
                                 *item = DocReference(CacheReference::Cached(ref_id));
                             }
-                        } else { // was known
+                        } else {
+                            // was known
                             if !is_known {
                                 change -= 1;
                                 *item = DocReference(CacheReference::Unknown(ref_id));
                             }
                         }
-                    };
+                    }
                 }
                 Meta::Was(_) | Meta::Replaces(_) => {}
             }
@@ -135,11 +142,11 @@ impl RelationalEntry<DocIdentifier> for StatefulDoc {
                             }
                             DocReference(CacheReference::Cached(_)) => {}
                         };
-                    };
+                    }
                 }
                 Meta::Was(_) | Meta::Replaces(_) => {}
             }
-        };
+        }
 
         missing
     }
