@@ -38,6 +38,7 @@ impl RFCDepApp {
             .column(Column::initial(75.0).clip(true).resizable(true))
             .column(Column::initial(75.0).clip(true).resizable(true))
             .column(Column::initial(75.0).clip(true).resizable(true))
+            .column(Column::initial(75.0).clip(true).resizable(true))
             .column(Column::remainder())
             .header(10.0, |mut header| {
                 vec![
@@ -47,6 +48,7 @@ impl RFCDepApp {
                     "Name",
                     "Title",
                     "Relations",
+                    "AKA",
                     "Was",
                     "Replaces",
                     "Updates",
@@ -93,10 +95,19 @@ impl RFCDepApp {
                             name_to_href(ui, id);
                         });
                         row.col(|ui| {
-                            ui.label(doc.title.clone());
+                            ui.label(doc.summary.title.clone());
                         });
                         row.col(|ui| {
                             ui.label(doc.meta_count().to_string());
+                        });
+                        row.col(|ui| {
+                            ui.horizontal(|ui| {
+                                for meta in &doc.meta {
+                                    if let Meta::AlsoKnownAs(id) = meta {
+                                        name_to_href(ui, id);
+                                    }
+                                }
+                            });
                         });
                         row.col(|ui| {
                             ui.horizontal(|ui| {

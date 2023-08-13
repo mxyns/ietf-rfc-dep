@@ -1,17 +1,30 @@
-use crate::app::RFCDepApp;
-use crate::doc::StatefulDoc;
 use eframe::egui;
 use eframe::egui::{Align, Ui};
+use rayon::prelude::*;
+use std::time::Duration;
+
 use rfc_dep_ietf::IetfDoc;
+
+use crate::app::RFCDepApp;
+use crate::doc::{DocReference, StatefulDoc};
 
 impl RFCDepApp {
     pub(crate) fn query_docs(&mut self) {
-        self.query_result = IetfDoc::lookup(
+        let result = IetfDoc::<DocReference>::lookup(
             self.search_query.as_str(),
             self.settings.query.limit,
-            self.settings.query.rfc_only,
+            !self.settings.query.include_drafts,
         );
-        self.selected_query_docs = vec![false; self.query_result.len()];
+
+        if let Ok(result) = result {
+            self.query_result = result;
+            self.selected_query_docs = vec![false; self.query_result.len()];
+        } else {
+            self.toasts
+                .error(format!("Lookup Error: {}", result.err().unwrap()))
+                .set_closable(true)
+                .set_duration(Some(Duration::from_secs(10)));
+        }
 
         println!("{:#?}", self.query_result);
         println!("{:#?}", self.selected_query_docs);
@@ -46,15 +59,27 @@ impl RFCDepApp {
 
                     if ui.button("include").clicked() {
                         let selected = &self.selected_query_docs;
-                        let mut results: Vec<IetfDoc<_>> = selected
+                        let mut results: Vec<_> = selected
                             .iter()
                             .enumerate()
                             .filter_map(|(i, b)| if *b { Some(i) } else { None })
                             .map(|i| self.query_result.get(i).unwrap().clone())
                             .collect();
 
+                        let mut results: Vec<_> = results
+                            .par_drain(..)
+                            .filter_map(|summary| {
+                                if let Ok(doc) = IetfDoc::from_url(summary.url) {
+                                    Some(doc)
+                                } else {
+                                    None
+                                }
+                            })
+                            .collect();
+
                         results.drain(..).for_each(|doc| {
-                            self.cache.cache(doc.name.clone(), StatefulDoc::new(doc));
+                            self.cache
+                                .cache(doc.summary.name.clone(), StatefulDoc::new(doc));
                         });
                     }
                 });
@@ -67,10 +92,13 @@ impl RFCDepApp {
                         10.0,
                         self.query_result.len(),
                         |ui, range| {
+                            let range_start = range.start;
                             for (idx, doc) in self.query_result[range].iter().enumerate() {
                                 ui.separator();
                                 ui.checkbox(
-                                    self.selected_query_docs.get_mut(idx).unwrap_or(&mut false),
+                                    self.selected_query_docs
+                                        .get_mut(range_start + idx)
+                                        .unwrap_or(&mut false),
                                     &doc.title,
                                 );
                                 ui.label(&doc.name);

@@ -18,6 +18,7 @@ where
     UpdatedBy(Vec<C::Holder<DocIdentifier>>),
     Obsoletes(Vec<C::Holder<DocIdentifier>>),
     ObsoletedBy(Vec<C::Holder<DocIdentifier>>),
+    AlsoKnownAs(DocIdentifier),
     Replaces(DocIdentifier),
     Was(DocIdentifier),
 }
@@ -49,11 +50,14 @@ where
                 Ok(was)
             }
             "replaces" => {
-                println!("{:#?}", inner_text);
                 let replaced = Meta::Replaces(inner_text[0].trim().to_string());
                 Ok(replaced)
             }
-            _ => Err(format!("Unknown Type {tyype}")),
+            "also_known_as" => {
+                let known_as = Meta::AlsoKnownAs(inner_text[1].trim().to_string());
+                Ok(known_as)
+            }
+            _ => Err(format!("Unknown Type {tyype} {{{:#?}}}", inner_text)),
         }
     }
 }

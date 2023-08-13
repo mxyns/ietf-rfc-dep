@@ -67,11 +67,10 @@ impl StatefulDoc {
 }
 
 impl ResolvableEntry<DocIdentifier> for StatefulDoc {
-    fn get_value(id: DocIdentifier) -> Self {
-        StatefulDoc::new(IetfDoc::from_url(format!(
-            "https://datatracker.ietf.org/doc/{}",
-            id
-        )))
+    fn get_value(id: DocIdentifier) -> Result<Self, String> {
+        let doc = IetfDoc::from_url(format!("https://datatracker.ietf.org/doc/{}", id))?;
+
+        Ok(StatefulDoc::new(doc))
     }
 }
 
@@ -98,7 +97,7 @@ impl RelationalEntry<DocIdentifier> for StatefulDoc {
                         };
                     }
                 }
-                Meta::Was(_) | Meta::Replaces(_) => {}
+                Meta::Was(_) | Meta::Replaces(_) | Meta::AlsoKnownAs(_) => {}
             }
         }
 
@@ -132,7 +131,7 @@ impl RelationalEntry<DocIdentifier> for StatefulDoc {
                         }
                     }
                 }
-                Meta::Was(_) | Meta::Replaces(_) => {}
+                Meta::Was(_) | Meta::Replaces(_) | Meta::AlsoKnownAs(_) => {}
             }
         }
 
@@ -156,7 +155,7 @@ impl RelationalEntry<DocIdentifier> for StatefulDoc {
                         };
                     }
                 }
-                Meta::Was(_) | Meta::Replaces(_) => {}
+                Meta::Was(_) | Meta::Replaces(_) | Meta::AlsoKnownAs(_) => {}
             }
         }
 

@@ -9,7 +9,6 @@ edition = "2021"
 # For http queries to datatracker
 reqwest = { version = "0.11", features = ["blocking", "json"] }
 tokio = { version = "1.29.1", features = ["full"] }
-rayon = { version = "1.7.0" }
 
 # For html parsing
 scraper = "0.17.1"

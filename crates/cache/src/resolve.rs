@@ -21,9 +21,9 @@ pub trait RelationalEntry<IdType> {
 /* represents an entry which value can be retrieved using only its id
  *   (eg: a document using an url, a file from its path, etc.)
  */
-pub trait ResolvableEntry<IdType> {
+pub trait ResolvableEntry<IdType>: Sized {
     // query the entry's value from its id
-    fn get_value(id: IdType) -> Self;
+    fn get_value(id: IdType) -> Result<Self, String>;
 }
 
 impl<IdType, ValueType> Cache<IdType, ValueType>
@@ -41,7 +41,11 @@ where
             .collect();
 
         for (id, value) in values {
-            self.cache(id.clone(), value);
+            if let Ok(value) = value {
+                self.cache(id.clone(), value);
+            } else {
+                println!("Could not query {}", value.err().unwrap())
+            }
         }
 
         new_ids

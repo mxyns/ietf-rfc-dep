@@ -9,7 +9,7 @@ pub(crate) struct QuerySettings {
     pub(crate) limit: usize,
 
     #[derivative(Default(value = "true"))]
-    pub(crate) rfc_only: bool,
+    pub(crate) include_drafts: bool,
 }
 
 #[derive(Default, Debug)]
@@ -34,8 +34,8 @@ impl RFCDepApp {
                 });
 
                 ui.horizontal(|ui| {
-                    ui.label("only rfc");
-                    ui.checkbox(&mut self.settings.query.rfc_only, "");
+                    ui.label("include drafts");
+                    ui.checkbox(&mut self.settings.query.include_drafts, "");
                 });
             });
         });

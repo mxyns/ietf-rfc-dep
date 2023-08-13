@@ -1,20 +1,23 @@
+use derivative::Derivative;
 use eframe::egui;
+use egui_notify::Toasts;
 
 use rfc_dep_cache::{ResolveParams, ResolveTarget};
-use rfc_dep_ietf::{DocIdentifier, IetfDoc};
+use rfc_dep_ietf::{DocIdentifier, Summary};
 
 use crate::cache::DocCache;
-use crate::doc::{update_missing_dep_count, DocReference};
+use crate::doc::update_missing_dep_count;
 use crate::settings::Settings;
 use crate::tabs::Tab;
 
-#[derive(Default, Debug)]
+#[derive(Default, Derivative)]
+#[derivative(Debug)]
 pub struct RFCDepApp {
     // Lookup Related
     pub(crate) search_query: String,
-    // TODO change to stateful doc or use a doc summary struct?
-    // we don't want ugly types exposed in the main app
-    pub(crate) query_result: Vec<IetfDoc<DocReference>>,
+    #[derivative(Debug = "ignore")]
+    pub(crate) toasts: Toasts,
+    pub(crate) query_result: Vec<Summary>,
     pub(crate) selected_query_docs: Vec<bool>,
 
     // Settings
@@ -58,6 +61,8 @@ impl eframe::App for RFCDepApp {
             ui.separator();
             self.make_tab_view(ui);
         });
+
+        self.toasts.show(ctx);
 
         if self.cache_requires_update {
             let to_resolve: Vec<DocIdentifier> = self

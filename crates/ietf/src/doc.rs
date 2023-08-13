@@ -1,7 +1,7 @@
 use crate::meta::Meta;
 use crate::IdContainer;
-use rayon::prelude::*;
 use regex::bytes::Regex;
+use reqwest::StatusCode;
 use serde::{Deserialize, Serialize};
 use std::fmt::Debug;
 
@@ -14,10 +14,15 @@ pub struct IetfDoc<C>
 where
     C: IdContainer,
 {
+    pub summary: Summary,
+    pub meta: Vec<Meta<C>>,
+}
+
+#[derive(Debug, Default, Clone, Serialize, Deserialize)]
+pub struct Summary {
     pub name: String,
     pub url: String,
     pub title: String,
-    pub meta: Vec<Meta<C>>,
 }
 
 pub fn name_to_id(name: &str) -> DocIdentifier {
@@ -28,13 +33,20 @@ impl<C> IetfDoc<C>
 where
     C: IdContainer,
 {
-    pub fn from_url(url: String) -> IetfDoc<C> {
+    pub fn from_url(url: String) -> Result<IetfDoc<C>, String> {
+        // TODO handle error
         let resp = reqwest::blocking::get(&*url).unwrap();
+        let status_code = resp.status();
+        if !StatusCode::is_success(&status_code) {
+            return Err(format!("Error querying {}: {}", url, status_code));
+        }
+
         let text = resp.text().unwrap();
         let document = scraper::Html::parse_document(&text);
 
         // Find Document Title and Name
         let selector = scraper::Selector::parse("#content > h1").unwrap();
+        println!("{}", url);
         let title_elem = document.select(&selector).next().unwrap();
         let title_text = title_elem.text().collect::<String>();
         let title_regex = Regex::new(r"^\s+(.+)\s+(.+)\s$").unwrap();
@@ -87,18 +99,20 @@ where
         }
 
         let doc = IetfDoc {
-            name: name_to_id(name.as_str()),
-            url: url.to_string(),
-            title,
+            summary: Summary {
+                name: name_to_id(name.as_str()),
+                url: url.to_string(),
+                title,
+            },
             meta: doc_meta,
         };
 
-        doc
+        Ok(doc)
     }
 
-    pub fn lookup(title: &str, limit: usize, rfc_only: bool) -> Vec<IetfDoc<C>> {
+    pub fn lookup(title: &str, limit: usize, rfc_only: bool) -> Result<Vec<Summary>, String> {
         if title.is_empty() {
-            return vec![];
+            return Err("no query".to_string());
         }
 
         let rfc_only = if rfc_only { "&states__in=3" } else { "" };
@@ -106,22 +120,33 @@ where
 
         println!("query = {query}");
         let resp = reqwest::blocking::get(query).unwrap();
-        let json: serde_json::Value = resp.json().unwrap();
+        let status_code = &resp.status();
+        if !StatusCode::is_success(status_code) {
+            return Err(format!("Got HTTP status code {}", status_code));
+        }
 
-        let urls: Vec<String> = json
-            .get("objects")
+        let summaries: Vec<Summary> = resp
+            .json::<serde_json::Value>()
             .unwrap()
-            .as_array()
+            .get_mut("objects")
             .unwrap()
-            .iter()
-            .filter_map(|obj| obj.get("name"))
-            .filter_map(serde_json::Value::as_str)
-            .map(|name| format!("https://datatracker.ietf.org/doc/{name}"))
+            .as_array_mut()
+            .unwrap()
+            .drain(..)
+            .map(|obj| {
+                let name = obj.get("name").unwrap().as_str().unwrap().to_string();
+
+                Summary {
+                    url: format!("https://datatracker.ietf.org/doc/{}", name),
+                    name,
+                    title: obj.get("title").unwrap().as_str().unwrap().to_string(),
+                }
+            })
             .collect();
 
-        println!("{} matches = {:#?}", urls.len(), &urls);
+        println!("{} matches = {:#?}", summaries.len(), &summaries);
 
-        urls.into_par_iter().map(IetfDoc::from_url).collect()
+        Ok(summaries)
     }
 
     pub fn meta_count(&self) -> usize {
@@ -134,7 +159,7 @@ where
                 | Meta::ObsoletedBy(list) => {
                     len += list.len();
                 }
-                Meta::Was(_) | Meta::Replaces(_) => len += 1,
+                Meta::Was(_) | Meta::Replaces(_) | Meta::AlsoKnownAs(_) => len += 1,
             }
         }
 
