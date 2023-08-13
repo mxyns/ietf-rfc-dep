@@ -10,12 +10,12 @@ fn name_to_href(ui: &mut Ui, s: &String) -> Response {
 }
 
 fn list_meta_links(ui: &mut Ui, list: &Vec<DocReference>) {
-    for meta in list {
+    for DocReference(meta) in list {
         match meta {
-            DocReference(CacheReference::Unknown(id)) => {
+            CacheReference::Unknown(id) => {
                 name_to_href(ui, id);
             }
-            DocReference(CacheReference::Cached(id)) => {
+            CacheReference::Cached(id) => {
                 name_to_href(ui, id);
             }
         }

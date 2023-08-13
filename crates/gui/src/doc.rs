@@ -1,5 +1,6 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
+use std::mem;
 
 use rfc_dep_cache::{CacheReference, RelationalEntry, ResolvableEntry};
 use rfc_dep_ietf::{name_to_id, DocIdentifier, IdContainer, IetfDoc, Meta};
@@ -18,8 +19,20 @@ impl IdContainer for DocReference {
             .into_iter()
             .skip(1)
             .step_by(2)
-            .map(|x| DocReference(CacheReference::Unknown(name_to_id(x))))
+            .map(|x| CacheReference::Unknown(name_to_id(x)).into())
             .collect()
+    }
+}
+
+impl From<DocReference> for CacheReference<DocIdentifier> {
+    fn from(value: DocReference) -> Self {
+        value.0
+    }
+}
+
+impl From<CacheReference<DocIdentifier>> for DocReference {
+    fn from(value: CacheReference<DocIdentifier>) -> Self {
+        DocReference(value)
     }
 }
 
@@ -76,12 +89,12 @@ impl RelationalEntry<DocIdentifier> for StatefulDoc {
                 | Meta::Obsoletes(list)
                 | Meta::UpdatedBy(list)
                 | Meta::ObsoletedBy(list) => {
-                    for item in list {
+                    for DocReference(item) in list {
                         match item {
-                            DocReference(CacheReference::Unknown(id)) => {
+                            CacheReference::Unknown(id) => {
                                 to_update.insert(id.clone());
                             }
-                            DocReference(CacheReference::Cached(_)) => {}
+                            CacheReference::Cached(_) => {}
                         };
                     }
                 }
@@ -100,22 +113,21 @@ impl RelationalEntry<DocIdentifier> for StatefulDoc {
                 | Meta::Obsoletes(list)
                 | Meta::UpdatedBy(list)
                 | Meta::ObsoletedBy(list) => {
-                    for item in list {
-                        let (DocReference(CacheReference::Cached(ref_id))
-                        | DocReference(CacheReference::Unknown(ref_id))) = item.clone();
-                        let is_known = is_known(&ref_id);
-
-                        // was unknown
-                        if let DocReference(CacheReference::Unknown(_)) = item {
-                            if is_known {
+                    for DocReference(ref mut cache_ref) in list {
+                        *cache_ref = match cache_ref {
+                            CacheReference::Unknown(ref mut r) if is_known(r) => {
                                 change += 1;
-                                *item = DocReference(CacheReference::Cached(ref_id));
+                                CacheReference::Cached(mem::take(r))
                             }
-                        } else {
-                            // was known
-                            if !is_known {
-                                change -= 1;
-                                *item = DocReference(CacheReference::Unknown(ref_id));
+                            CacheReference::Cached(ref mut r) if !is_known(r) => {
+                                change += -1;
+                                CacheReference::Unknown(mem::take(r))
+                            }
+                            CacheReference::Unknown(ref mut r) => {
+                                CacheReference::Unknown(mem::take(r))
+                            }
+                            CacheReference::Cached(ref mut r) => {
+                                CacheReference::Cached(mem::take(r))
                             }
                         }
                     }
@@ -135,12 +147,12 @@ impl RelationalEntry<DocIdentifier> for StatefulDoc {
                 | Meta::Obsoletes(list)
                 | Meta::UpdatedBy(list)
                 | Meta::ObsoletedBy(list) => {
-                    for item in list {
+                    for DocReference(item) in list {
                         match item {
-                            DocReference(CacheReference::Unknown(_)) => {
+                            CacheReference::Unknown(_) => {
                                 missing += 1;
                             }
-                            DocReference(CacheReference::Cached(_)) => {}
+                            CacheReference::Cached(_) => {}
                         };
                     }
                 }
