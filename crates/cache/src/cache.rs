@@ -8,9 +8,15 @@ pub trait CacheIdentifier: Eq + Hash + Ord {}
 
 impl<T> CacheIdentifier for T where T: Eq + Hash + Ord {}
 
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Cache<IdType: CacheIdentifier, ValueType> {
     pub(crate) map: BTreeMap<IdType, ValueType>,
+}
+
+impl<IdType: CacheIdentifier, ValueType> Default for Cache<IdType, ValueType> {
+    fn default() -> Self { Cache {
+        map: BTreeMap::default()
+    } }
 }
 
 #[derive(Clone, Serialize, Deserialize)]

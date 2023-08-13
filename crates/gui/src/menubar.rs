@@ -1,12 +1,14 @@
 use eframe::egui;
 use eframe::egui::{Context, Ui};
 use if_chain::if_chain;
-use rfc_dep_cache::{Cache, ResolveParams, ResolveTarget};
-use crate::doc::{update_missing_dep_count, StatefulDoc};
-use rfc_dep_ietf::{DocIdentifier};
-use crate::app::RFCDepApp;
 use std::fs::File;
 use egui_modal::Modal;
+
+use rfc_dep_cache::{ResolveParams, ResolveTarget};
+
+use crate::doc::{update_missing_dep_count};
+use crate::cache::{DocCache};
+use crate::app::RFCDepApp;
 
 impl RFCDepApp {
     pub(crate) fn make_menu(&mut self, ui: &mut Ui, confirm_clear: Modal) {
@@ -46,7 +48,7 @@ impl RFCDepApp {
                             .pick_file();
                         if let Ok(file) = File::open(path);
                         then {
-                            let new_state: Cache<DocIdentifier, StatefulDoc> = serde_json::from_reader(file).unwrap();
+                            let new_state: DocCache = serde_json::from_reader(file).unwrap();
                             println!("{:#?}", new_state);
                             self.merge_caches(new_state);
                             println!("{:#?}", self.cache);

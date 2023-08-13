@@ -1,18 +1,19 @@
 use eframe::egui::{Response, Ui};
 use egui_extras::{Column, TableBuilder};
 use rfc_dep_cache::CacheReference;
-use rfc_dep_ietf::{DocIdentifier, Meta};
+use rfc_dep_ietf::{Meta};
 use crate::app::RFCDepApp;
+use crate::doc::DocReference;
 
 fn name_to_href(ui: &mut Ui, s: &String) -> Response {
     ui.hyperlink_to(s, format!("https://datatracker.ietf.org/doc/{s}"))
 }
 
-fn list_meta_links(ui: &mut Ui, list: &Vec<CacheReference<DocIdentifier>>) {
+fn list_meta_links(ui: &mut Ui, list: &Vec<DocReference>) {
     for meta in list {
         match meta {
-            CacheReference::Unknown(id) => { name_to_href(ui, id); }
-            CacheReference::Cached(id) => { name_to_href(ui, id); }
+            DocReference(CacheReference::Unknown(id)) => { name_to_href(ui, id); }
+            DocReference(CacheReference::Cached(id)) => { name_to_href(ui, id); }
         }
     }
 }

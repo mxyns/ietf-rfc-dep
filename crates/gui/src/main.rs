@@ -8,6 +8,7 @@ mod menubar;
 mod sidebar;
 mod table_view;
 mod settings;
+mod cache;
 
 fn main() {
     let options = eframe::NativeOptions {

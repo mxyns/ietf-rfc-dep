@@ -1,22 +1,27 @@
 use eframe::egui;
+
 use rfc_dep_ietf::{DocIdentifier, IetfDoc};
-use rfc_dep_cache::{Cache, ResolveParams, ResolveTarget};
-use crate::doc::{StatefulDoc, update_missing_dep_count};
+use rfc_dep_cache::{ResolveParams, ResolveTarget};
+
+use crate::doc::{DocReference, update_missing_dep_count};
 use crate::tabs::{Tab};
 use crate::settings::{Settings};
+use crate::cache::{DocCache};
 
 #[derive(Default, Debug)]
 pub struct RFCDepApp {
     // Lookup Related
     pub(crate) search_query: String,
-    pub(crate) query_result: Vec<IetfDoc>,
+    // TODO change to stateful doc or use a doc summary struct?
+    // we don't want ugly types exposed in the main app
+    pub(crate) query_result: Vec<IetfDoc<DocReference>>,
     pub(crate) selected_query_docs: Vec<bool>,
 
     // Settings
     pub(crate) settings: Settings,
 
     // Doc State
-    pub(crate) cache: Cache<DocIdentifier, StatefulDoc>,
+    pub(crate) cache: DocCache,
     pub(crate) cache_requires_update: bool,
     pub(crate) list_selected_count: usize,
 
@@ -31,37 +36,6 @@ impl RFCDepApp {
         };
 
         app
-    }
-
-    pub(crate) fn query_docs(&mut self) {
-        self.query_result = IetfDoc::lookup(self.search_query.as_str(),
-                                            self.settings.query.limit,
-                                            self.settings.query.rfc_only);
-        self.selected_query_docs = vec![false; self.query_result.len()];
-
-        println!("{:#?}", self.query_result);
-        println!("{:#?}", self.selected_query_docs);
-    }
-
-    pub(crate) fn merge_caches(&mut self, other: Cache<DocIdentifier, StatefulDoc>) {
-        self.cache.merge_with(other);
-        self.update_cache(None);
-    }
-
-
-    pub(crate) fn update_cache(&mut self, new_cache: Option<Cache<DocIdentifier, StatefulDoc>>) {
-        // Check if import resolved some dependencies
-        // Do not query new documents, use only the already provided
-        // Max depth = 1
-        if let Some(new_cache) = new_cache {
-            self.cache = new_cache;
-        }
-
-        self.cache.resolve_dependencies(ResolveTarget::All, ResolveParams {
-            print: true,
-            depth: 1,
-            query: false,
-        }, update_missing_dep_count);
     }
 
     pub(crate) fn reset(&mut self) {

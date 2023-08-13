@@ -1,4 +1,3 @@
-
 /* represents an entry containing references to other entries */
 use std::collections::HashSet;
 use std::fmt;
@@ -15,6 +14,8 @@ pub trait RelationalEntry<IdType> {
     // if an id is now known in the calling context
     // returns the number of new references
     fn update_unknown_references(&mut self, is_known: impl Fn(&IdType) -> bool) -> isize;
+
+    fn get_unknown_relations_count(&self) -> usize;
 }
 
 /* represents an entry which value can be retrieved using only its id

@@ -4,5 +4,5 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-serde = { version = "1.0.175" }
+serde = { version = "1.0.175", features=["derive"]}
 rayon = { version = "1.7.0" }

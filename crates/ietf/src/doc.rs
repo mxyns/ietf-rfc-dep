@@ -1,27 +1,34 @@
+use std::fmt::Debug;
 use regex;
 use regex::bytes::Regex;
 use serde::{Deserialize, Serialize};
 use rayon::prelude::*;
-use rfc_dep_cache::{CacheReference};
+use crate::IdContainer;
 use crate::meta::Meta;
 
 /* Identify IETF documents by String (internal name) for now */
 pub type DocIdentifier = String;
 
+
 #[derive(Debug, Default, Clone, Serialize, Deserialize)]
-pub struct IetfDoc {
+// C represents the container type used to hold document references
+pub struct IetfDoc<C>
+where C: IdContainer
+{
     pub name: String,
     pub url: String,
     pub title: String,
-    pub meta: Vec<Meta>,
+    pub meta: Vec<Meta<C>>,
 }
 
 pub fn name_to_id(name: &str) -> DocIdentifier {
     name.to_string().replace(" ", "").to_lowercase()
 }
 
-impl IetfDoc {
-    pub fn from_url(url: String) -> IetfDoc {
+impl<C> IetfDoc<C>
+where C: IdContainer
+{
+    pub fn from_url(url: String) -> IetfDoc<C> {
         let resp = reqwest::blocking::get(&*url).unwrap();
         let text = resp.text().unwrap();
         let document = scraper::Html::parse_document(&text);
@@ -40,7 +47,7 @@ impl IetfDoc {
         let meta_elems = document.select(&selector).collect::<Vec<_>>();
 
         // Parse Document Relationship Metadata
-        let mut doc_meta: Vec<Meta> = Vec::new();
+        let mut doc_meta: Vec<Meta<C>> = Vec::new();
         for item in meta_elems {
             let inner_text = item.text().collect::<Vec<_>>();
             // Skip empty items
@@ -83,12 +90,12 @@ impl IetfDoc {
         doc
     }
 
-    pub fn lookup(title: &str, limit: usize, rfc_only: bool) -> Vec<IetfDoc> {
+    pub fn lookup(title: &str, limit: usize, rfc_only: bool) -> Vec<IetfDoc<C>> {
         if title.len() == 0 {
             return vec![];
         }
 
-        let rfc_only = if rfc_only { "&states__in=3" } else {""};
+        let rfc_only = if rfc_only { "&states__in=3" } else { "" };
         let query = format!("https://datatracker.ietf.org/api/v1/doc/document/?title__icontains={title}&limit={limit}&offset=0&format=json{rfc_only}&type__in=draft");
 
         println!("query = {query}");
@@ -108,30 +115,6 @@ impl IetfDoc {
         urls.into_par_iter()
             .map(IetfDoc::from_url)
             .collect()
-    }
-
-    pub fn missing(&self) -> usize {
-        let mut missing = 0;
-        for meta in &self.meta {
-            match meta {
-                Meta::Updates(list)
-                | Meta::Obsoletes(list)
-                | Meta::UpdatedBy(list)
-                | Meta::ObsoletedBy(list) => {
-                    for item in list {
-                        match item {
-                            CacheReference::Unknown(_) => {
-                                missing += 1;
-                            }
-                            CacheReference::Cached(_) => {}
-                        };
-                    };
-                }
-                Meta::Was(_) | Meta::Replaces(_) => {}
-            }
-        };
-
-        missing
     }
 
     pub fn meta_count(&self) -> usize {
