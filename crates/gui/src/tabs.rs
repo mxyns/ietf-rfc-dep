@@ -42,7 +42,7 @@ impl Tab {
     pub(crate) fn make_tab_ui(&self, app: &mut RFCDepApp, ui: &mut Ui) {
         match self {
             Tab::Table => {
-                if ui.button("list").clicked() {
+                if ui.button("table").clicked() {
                     app.selected_tab = Tab::Table;
                 }
             }

@@ -19,6 +19,7 @@ pub struct RFCDepApp {
     pub(crate) toasts: Toasts,
     pub(crate) query_result: Vec<Summary>,
     pub(crate) selected_query_docs: Vec<bool>,
+    pub(crate) direct_import_name: String,
 
     // Settings
     pub(crate) settings: Settings,
@@ -48,9 +49,10 @@ impl RFCDepApp {
 impl eframe::App for RFCDepApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         let confirm_clear = self.make_clear_confirm_dialog(ctx);
+        let import_name = self.make_import_name_modal(ctx);
 
         egui::TopBottomPanel::top("menu").show(ctx, |ui| {
-            self.make_menu(ui, confirm_clear);
+            self.make_menu(ui, confirm_clear, import_name);
         });
 
         egui::SidePanel::left("search").show(ctx, |ui| {

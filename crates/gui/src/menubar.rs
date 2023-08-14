@@ -5,12 +5,17 @@ use if_chain::if_chain;
 use std::fs::File;
 
 use rfc_dep_cache::{ResolveParams, ResolveTarget};
+use rfc_dep_ietf::IetfDoc;
 
 use crate::app::RFCDepApp;
 use crate::cache::DocCache;
+use crate::doc::StatefulDoc;
 
 impl RFCDepApp {
-    pub(crate) fn make_menu(&mut self, ui: &mut Ui, confirm_clear: Modal) {
+    pub(crate) fn make_menu(&mut self,
+                            ui: &mut Ui,
+                            confirm_clear: Modal,
+                            import_name: Modal) {
         egui::menu::bar(ui, |ui| {
             ui.menu_button("File", |ui| {
                 // Open Button
@@ -59,6 +64,12 @@ impl RFCDepApp {
                 // Clear Button
                 if ui.button("Clear").clicked() {
                     confirm_clear.open();
+                }
+            });
+
+            ui.menu_button("Document", |ui| {
+                if ui.button("From name").clicked() {
+                    import_name.open()
                 }
             });
 
@@ -138,6 +149,40 @@ impl RFCDepApp {
                 if modal.suggested_button(ui, "clear").clicked() {
                     self.reset();
                     println!("{:#?}", self.cache);
+                };
+            });
+        });
+
+        modal
+    }
+
+    pub(crate) fn make_import_name_modal(&mut self, ctx: &Context) -> Modal {
+        let modal = Modal::new(ctx, "import_name").with_close_on_outside_click(false);
+
+        modal.show(|ui| {
+            modal.title(ui, "Import from name");
+            modal.body_and_icon(
+                ui,
+                "Provide the exact name of the document",
+                egui_modal::Icon::Info,
+            );
+
+            ui.separator();
+
+            ui.add(
+                egui::widgets::TextEdit::singleline(&mut self.direct_import_name)
+                    .hint_text("rfcXXXX")
+            );
+
+            modal.buttons(ui, |ui| {
+                if modal.caution_button(ui, "cancel").clicked() {
+                    modal.close()
+                }
+                if modal.suggested_button(ui, "import").clicked() {
+                    if self.direct_import_name.is_empty() { return; }
+                    if let Ok(doc) = IetfDoc::from_name(&self.direct_import_name) {
+                        self.cache.cache(doc.summary.id.clone(), StatefulDoc::new(doc));
+                    }
                 };
             });
         });

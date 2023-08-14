@@ -78,7 +78,7 @@ impl RFCDepApp {
 
                         results.drain(..).for_each(|doc| {
                             self.cache
-                                .cache(doc.summary.name.clone(), StatefulDoc::new(doc));
+                                .cache(doc.summary.id.clone(), StatefulDoc::new(doc));
                         });
                     }
                 });
@@ -100,7 +100,7 @@ impl RFCDepApp {
                                         .unwrap_or(&mut false),
                                     &doc.title,
                                 );
-                                ui.label(&doc.name);
+                                ui.label(&doc.id);
                                 ui.hyperlink_to("datatracker", &doc.url);
                             }
                             ui.separator();

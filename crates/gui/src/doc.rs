@@ -68,8 +68,7 @@ impl StatefulDoc {
 
 impl ResolvableEntry<DocIdentifier> for StatefulDoc {
     fn get_value(id: DocIdentifier) -> Result<Self, String> {
-        let doc = IetfDoc::from_url(format!("https://datatracker.ietf.org/doc/{}", id))?;
-
+        let doc = IetfDoc::from_name(id)?;
         Ok(StatefulDoc::new(doc))
     }
 }

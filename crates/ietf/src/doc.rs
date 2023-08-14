@@ -21,7 +21,7 @@ where
 
 #[derive(Debug, Default, Clone, Serialize, Deserialize)]
 pub struct Summary {
-    pub name: String,
+    pub id: String,
     pub url: String,
     pub title: String,
 }
@@ -34,13 +34,26 @@ impl<C> IetfDoc<C>
 where
     C: IdContainer,
 {
+
+    pub fn id_to_url(id: impl Into<String>) -> String {
+        format!("https://datatracker.ietf.org/doc/{}", id.into())
+    }
+    pub fn from_name(name: impl Into<String>) -> Result<IetfDoc<C>, String> {
+        Self::from_url(Self::id_to_url(name))
+    }
+
     pub fn from_url(url: String) -> Result<IetfDoc<C>, String> {
-        // TODO handle error
         let resp = reqwest::blocking::get(&*url).unwrap();
         let status_code = resp.status();
         if !StatusCode::is_success(&status_code) {
             return Err(format!("Error querying {}: {}", url, status_code));
         }
+        if resp.url().path() == "/doc/search" {
+            return Err(format!("Error querying {}: document doesn't exist", url));
+        }
+
+        println!("{}", status_code);
+        println!("{:#?}", resp);
 
         let text = resp.text().unwrap();
         let document = scraper::Html::parse_document(&text);
@@ -101,7 +114,7 @@ where
 
         let doc = IetfDoc {
             summary: Summary {
-                name: name_to_id(name.as_str()),
+                id: name_to_id(name.as_str()),
                 url: url.to_string(),
                 title,
             },
@@ -143,7 +156,7 @@ where
             .map(|obj| {
                 println!("{:#?}", obj);
                 let rfc_num = obj.get("rfc");
-                let name = if rfc_num.is_some_and(|val| !val.is_null()) {
+                let id = if rfc_num.is_some_and(|val| !val.is_null()) {
                     println!("{:#?}", rfc_num);
                     format!("rfc{}", rfc_num.unwrap().as_str().unwrap())
                 } else {
@@ -151,8 +164,8 @@ where
                 };
 
                 Summary {
-                    url: format!("https://datatracker.ietf.org/doc/{}", name),
-                    name,
+                    url: Self::id_to_url(&id),
+                    id,
                     title: obj.get("title").unwrap().as_str().unwrap().to_string(),
                 }
             })
