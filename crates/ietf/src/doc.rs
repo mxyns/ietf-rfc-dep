@@ -3,7 +3,7 @@ use crate::IdContainer;
 use regex::bytes::Regex;
 use reqwest::StatusCode;
 use serde::{Deserialize, Serialize};
-use std::fmt::Debug;
+use std::fmt::{Debug};
 
 /* Identify IETF documents by String (internal name) for now */
 pub type DocIdentifier = String;
@@ -119,7 +119,13 @@ where
         let query = format!("https://datatracker.ietf.org/api/v1/doc/document/?title__icontains={title}&limit={limit}&offset=0&format=json{rfc_only}&type__in=draft");
 
         println!("query = {query}");
-        let resp = reqwest::blocking::get(query).unwrap();
+        let resp = reqwest::blocking::get(query);
+        let resp = if let Ok(resp) = resp {
+            resp
+        } else {
+            return Err(format!("Query Error {}", resp.err().unwrap()));
+        };
+
         let status_code = &resp.status();
         if !StatusCode::is_success(status_code) {
             return Err(format!("Got HTTP status code {}", status_code));
