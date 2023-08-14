@@ -1,9 +1,10 @@
 use crate::meta::Meta;
 use crate::IdContainer;
+use rayon::prelude::*;
 use regex::bytes::Regex;
 use reqwest::StatusCode;
 use serde::{Deserialize, Serialize};
-use std::fmt::{Debug};
+use std::fmt::Debug;
 
 /* Identify IETF documents by String (internal name) for now */
 pub type DocIdentifier = String;
@@ -110,12 +111,12 @@ where
         Ok(doc)
     }
 
-    pub fn lookup(title: &str, limit: usize, rfc_only: bool) -> Result<Vec<Summary>, String> {
+    pub fn lookup(title: &str, limit: usize, include_drafts: bool) -> Result<Vec<Summary>, String> {
         if title.is_empty() {
             return Err("no query".to_string());
         }
 
-        let rfc_only = if rfc_only { "&states__in=3" } else { "" };
+        let rfc_only = if include_drafts { "" } else { "&states__in=3" };
         let query = format!("https://datatracker.ietf.org/api/v1/doc/document/?title__icontains={title}&limit={limit}&offset=0&format=json{rfc_only}&type__in=draft");
 
         println!("query = {query}");
@@ -138,9 +139,16 @@ where
             .unwrap()
             .as_array_mut()
             .unwrap()
-            .drain(..)
+            .par_drain(..)
             .map(|obj| {
-                let name = obj.get("name").unwrap().as_str().unwrap().to_string();
+                println!("{:#?}", obj);
+                let rfc_num = obj.get("rfc");
+                let name = if rfc_num.is_some_and(|val| !val.is_null()) {
+                    println!("{:#?}", rfc_num);
+                    format!("rfc{}", rfc_num.unwrap().as_str().unwrap())
+                } else {
+                    obj.get("name").unwrap().as_str().unwrap().into()
+                };
 
                 Summary {
                     url: format!("https://datatracker.ietf.org/doc/{}", name),

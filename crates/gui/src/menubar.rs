@@ -8,7 +8,6 @@ use rfc_dep_cache::{ResolveParams, ResolveTarget};
 
 use crate::app::RFCDepApp;
 use crate::cache::DocCache;
-use crate::doc::update_missing_dep_count;
 
 impl RFCDepApp {
     pub(crate) fn make_menu(&mut self, ui: &mut Ui, confirm_clear: Modal) {
@@ -109,14 +108,13 @@ impl RFCDepApp {
                     });
 
                     if ui.button("Resolve All").clicked() {
-                        self.cache.resolve_dependencies(
+                        self.task_resolve_dependencies(
                             ResolveTarget::All,
                             ResolveParams {
                                 print: true,
                                 depth: self.settings.max_depth,
                                 query: true,
                             },
-                            update_missing_dep_count,
                         );
                     }
                 });

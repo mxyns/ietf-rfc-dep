@@ -1,12 +1,12 @@
 use derivative::Derivative;
 use eframe::egui;
 use egui_notify::Toasts;
+use std::thread::JoinHandle;
 
 use rfc_dep_cache::{ResolveParams, ResolveTarget};
 use rfc_dep_ietf::{DocIdentifier, Summary};
 
 use crate::cache::DocCache;
-use crate::doc::update_missing_dep_count;
 use crate::settings::Settings;
 use crate::tabs::Tab;
 
@@ -27,6 +27,7 @@ pub struct RFCDepApp {
     pub(crate) cache: DocCache,
     pub(crate) cache_requires_update: bool,
     pub(crate) list_selected_count: usize,
+    pub(crate) resolve_handle: Option<JoinHandle<DocCache>>,
 
     // RFC Viewer
     pub(crate) selected_tab: Tab,
@@ -64,7 +65,9 @@ impl eframe::App for RFCDepApp {
 
         self.toasts.show(ctx);
 
-        if self.cache_requires_update {
+        self.check_resolve_result();
+
+        if !self.is_resolving() && self.cache_requires_update {
             let to_resolve: Vec<DocIdentifier> = self
                 .cache
                 .into_iter()
@@ -72,14 +75,13 @@ impl eframe::App for RFCDepApp {
                 .cloned()
                 .collect();
 
-            self.cache.resolve_dependencies(
+            self.task_resolve_dependencies(
                 ResolveTarget::Multiple(to_resolve),
                 ResolveParams {
                     print: true,
                     depth: self.settings.max_depth,
                     query: true,
                 },
-                update_missing_dep_count,
             );
 
             self.cache_requires_update = false;

@@ -13,7 +13,7 @@ impl RFCDepApp {
         let result = IetfDoc::<DocReference>::lookup(
             self.search_query.as_str(),
             self.settings.query.limit,
-            !self.settings.query.include_drafts,
+            self.settings.query.include_drafts,
         );
 
         if let Ok(result) = result {
@@ -27,7 +27,6 @@ impl RFCDepApp {
         }
 
         println!("{:#?}", self.query_result);
-        println!("{:#?}", self.selected_query_docs);
     }
 
     pub(crate) fn make_sidebar(&mut self, ui: &mut Ui) {

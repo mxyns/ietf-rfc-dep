@@ -8,7 +8,6 @@ pub(crate) struct QuerySettings {
     #[derivative(Default(value = "100"))]
     pub(crate) limit: usize,
 
-    #[derivative(Default(value = "true"))]
     pub(crate) include_drafts: bool,
 }
 
