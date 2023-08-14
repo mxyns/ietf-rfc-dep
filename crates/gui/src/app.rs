@@ -20,6 +20,7 @@ pub struct RFCDepApp {
     pub(crate) query_result: Vec<Summary>,
     pub(crate) selected_query_docs: Vec<bool>,
     pub(crate) direct_import_name: String,
+    pub(crate) query_filter: String,
 
     // Settings
     pub(crate) settings: Settings,

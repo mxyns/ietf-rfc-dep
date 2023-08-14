@@ -12,10 +12,7 @@ use crate::cache::DocCache;
 use crate::doc::StatefulDoc;
 
 impl RFCDepApp {
-    pub(crate) fn make_menu(&mut self,
-                            ui: &mut Ui,
-                            confirm_clear: Modal,
-                            import_name: Modal) {
+    pub(crate) fn make_menu(&mut self, ui: &mut Ui, confirm_clear: Modal, import_name: Modal) {
         egui::menu::bar(ui, |ui| {
             ui.menu_button("File", |ui| {
                 // Open Button
@@ -171,7 +168,7 @@ impl RFCDepApp {
 
             ui.add(
                 egui::widgets::TextEdit::singleline(&mut self.direct_import_name)
-                    .hint_text("rfcXXXX")
+                    .hint_text("rfcXXXX"),
             );
 
             modal.buttons(ui, |ui| {
@@ -179,9 +176,12 @@ impl RFCDepApp {
                     modal.close()
                 }
                 if modal.suggested_button(ui, "import").clicked() {
-                    if self.direct_import_name.is_empty() { return; }
+                    if self.direct_import_name.is_empty() {
+                        return;
+                    }
                     if let Ok(doc) = IetfDoc::from_name(&self.direct_import_name) {
-                        self.cache.cache(doc.summary.id.clone(), StatefulDoc::new(doc));
+                        self.cache
+                            .cache(doc.summary.id.clone(), StatefulDoc::new(doc));
                     }
                 };
             });

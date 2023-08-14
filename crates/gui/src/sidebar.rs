@@ -1,5 +1,5 @@
 use eframe::egui;
-use eframe::egui::{Align, Ui};
+use eframe::egui::{Align, TextEdit, Ui};
 use rayon::prelude::*;
 use std::time::Duration;
 
@@ -47,6 +47,7 @@ impl RFCDepApp {
                 self.make_query_settings_ui(ui);
             });
             ui.end_row();
+            ui.add(TextEdit::singleline(&mut self.query_filter).hint_text("filter results"));
 
             ui.with_layout(egui::Layout::bottom_up(Align::LEFT), |ui| {
                 ui.with_layout(egui::Layout::right_to_left(Align::BOTTOM), |ui| {
@@ -91,13 +92,17 @@ impl RFCDepApp {
                         10.0,
                         self.query_result.len(),
                         |ui, range| {
-                            let range_start = range.start;
-                            for (idx, doc) in self.query_result[range].iter().enumerate() {
+                            let displayed =
+                                self.query_result.iter().enumerate().filter(|(idx, val)| {
+                                    range.contains(idx)
+                                        && (val.title.contains(self.query_filter.as_str())
+                                            || val.id.contains(self.query_filter.as_str()))
+                                });
+
+                            for (idx, doc) in displayed {
                                 ui.separator();
                                 ui.checkbox(
-                                    self.selected_query_docs
-                                        .get_mut(range_start + idx)
-                                        .unwrap_or(&mut false),
+                                    self.selected_query_docs.get_mut(idx).unwrap_or(&mut false),
                                     &doc.title,
                                 );
                                 ui.label(&doc.id);

@@ -34,7 +34,6 @@ impl<C> IetfDoc<C>
 where
     C: IdContainer,
 {
-
     pub fn id_to_url(id: impl Into<String>) -> String {
         format!("https://datatracker.ietf.org/doc/{}", id.into())
     }
