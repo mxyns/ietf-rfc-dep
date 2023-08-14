@@ -15,6 +15,7 @@ pub trait RelationalEntry<IdType> {
     // returns the number of new references
     fn update_unknown_references(&mut self, is_known: impl Fn(&IdType) -> bool) -> isize;
 
+    // give the self.get_unknown_relations().len() without computing it
     fn get_unknown_relations_count(&self) -> usize;
 }
 

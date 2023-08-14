@@ -168,7 +168,7 @@ impl RFCDepApp {
 
             ui.add(
                 egui::widgets::TextEdit::singleline(&mut self.direct_import_name)
-                    .hint_text("rfcXXXX"),
+                    .hint_text("rfcXXXX / draft-abcdef"),
             );
 
             modal.buttons(ui, |ui| {
