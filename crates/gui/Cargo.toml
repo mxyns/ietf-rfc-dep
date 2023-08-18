@@ -31,3 +31,5 @@ rayon = { version= "1.7.0" }
 # Sugar
 if_chain = "1.0.2"
 derivative = "2.2.0"
+
+reqwest = "0.11.18"

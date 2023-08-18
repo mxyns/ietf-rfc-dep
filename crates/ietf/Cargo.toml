@@ -8,6 +8,7 @@ edition = "2021"
 [dependencies]
 # For http queries to datatracker
 reqwest = { version = "0.11", features = ["blocking", "json"] }
+url = { version = "2.4.0", features = [ "serde" ] }
 tokio = { version = "1.29.1", features = ["full"] }
 
 # For html parsing

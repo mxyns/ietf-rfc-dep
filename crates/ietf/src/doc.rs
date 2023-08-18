@@ -1,28 +1,34 @@
+use std::error::Error;
 use crate::meta::Meta;
 use crate::IdContainer;
 use rayon::prelude::*;
 use regex::bytes::Regex;
-use reqwest::StatusCode;
+use reqwest::{StatusCode, Url};
 use serde::{Deserialize, Serialize};
-use std::fmt::Debug;
+use std::fmt::{Debug, Display, Formatter};
+use std::str::FromStr;
+use url::ParseError;
+use crate::DocError::*;
 
 /* Identify IETF documents by String (internal name) for now */
 pub type DocIdentifier = String;
 
-#[derive(Debug, Default, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 // C represents the container type used to hold document references
 pub struct IetfDoc<C>
-where
-    C: IdContainer,
+    where
+        C: IdContainer,
 {
     pub summary: Summary,
     pub meta: Vec<Meta<C>>,
 }
 
-#[derive(Debug, Default, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Summary {
     pub id: String,
-    pub url: String,
+    // pub revision: String,
+    // pub is_rfc: bool,
+    pub url: Url,
     pub title: String,
 }
 
@@ -31,24 +37,29 @@ pub fn name_to_id(name: &str) -> DocIdentifier {
 }
 
 impl<C> IetfDoc<C>
-where
-    C: IdContainer,
+    where
+        C: IdContainer,
 {
-    pub fn id_to_url(id: impl Into<String>) -> String {
+    pub fn id_to_url_str(id: impl Into<String>) -> String {
         format!("https://datatracker.ietf.org/doc/{}", id.into())
     }
-    pub fn from_name(name: impl Into<String>) -> Result<IetfDoc<C>, String> {
-        Self::from_url(Self::id_to_url(name))
+
+    pub fn id_to_url(id: impl Into<String>) -> Result<Url> {
+        Ok(Url::from_str(Self::id_to_url_str(id).as_str())?)
     }
 
-    pub fn from_url(url: String) -> Result<IetfDoc<C>, String> {
-        let resp = reqwest::blocking::get(&*url).unwrap();
+    pub fn from_name(name: impl Into<String>) -> Result<IetfDoc<C>> {
+        Self::from_html(&Self::id_to_url(name)?)
+    }
+
+    pub fn from_html(url: &Url) -> Result<IetfDoc<C>> {
+        let resp = reqwest::blocking::get(url.as_str()).unwrap();
         let status_code = resp.status();
         if !StatusCode::is_success(&status_code) {
-            return Err(format!("Error querying {}: {}", url, status_code));
+            return QueryError(format!("Error querying {}: {}", url, status_code)).into();
         }
         if resp.url().path() == "/doc/search" {
-            return Err(format!("Error querying {}: document doesn't exist", url));
+            return QueryError(format!("Error querying {}: document doesn't exist", url)).into();
         }
 
         println!("{}", status_code);
@@ -97,7 +108,7 @@ where
         let selector = scraper::Selector::parse(
             "tbody.meta:nth-child(1) > tr:nth-child(4) > td:nth-child(4) > a:nth-child(1)",
         )
-        .unwrap();
+            .unwrap();
         if let Some(replaces) = document
             .select(&selector)
             .next()
@@ -111,10 +122,11 @@ where
             }
         }
 
+        // TODO optional summary to move into here
         let doc = IetfDoc {
             summary: Summary {
                 id: name_to_id(name.as_str()),
-                url: url.to_string(),
+                url: url.clone(),
                 title,
             },
             meta: doc_meta,
@@ -123,9 +135,9 @@ where
         Ok(doc)
     }
 
-    pub fn lookup(title: &str, limit: usize, include_drafts: bool) -> Result<Vec<Summary>, String> {
+    pub fn lookup(title: &str, limit: usize, include_drafts: bool) -> Result<Vec<Summary>> {
         if title.is_empty() {
-            return Err("no query".to_string());
+            return LookupError("no query".to_string()).into();
         }
 
         let rfc_only = if include_drafts { "" } else { "&states__in=3" };
@@ -136,12 +148,12 @@ where
         let resp = if let Ok(resp) = resp {
             resp
         } else {
-            return Err(format!("Query Error {}", resp.err().unwrap()));
+            return LookupError(format!("could not http/GET {}", resp.err().unwrap())).into();
         };
 
         let status_code = &resp.status();
         if !StatusCode::is_success(status_code) {
-            return Err(format!("Got HTTP status code {}", status_code));
+            return LookupError(format!("unsuccessful status http/GET status {}", status_code)).into();
         }
 
         let summaries: Vec<Summary> = resp
@@ -163,7 +175,7 @@ where
                 };
 
                 Summary {
-                    url: Self::id_to_url(&id),
+                    url: Self::id_to_url(&id).unwrap(),
                     id,
                     title: obj.get("title").unwrap().as_str().unwrap().to_string(),
                 }

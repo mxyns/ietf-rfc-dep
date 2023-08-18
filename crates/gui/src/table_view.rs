@@ -3,10 +3,10 @@ use crate::doc::DocReference;
 use eframe::egui::{Response, Ui};
 use egui_extras::{Column, TableBuilder};
 use rfc_dep_cache::CacheReference;
-use rfc_dep_ietf::Meta;
+use rfc_dep_ietf::{IetfDoc, Meta};
 
 fn name_to_href(ui: &mut Ui, s: &String) -> Response {
-    ui.hyperlink_to(s, format!("https://datatracker.ietf.org/doc/{s}"))
+    ui.hyperlink_to(s, IetfDoc::<DocReference>::id_to_url(s).unwrap())
 }
 
 fn list_meta_links(ui: &mut Ui, list: &Vec<DocReference>) {

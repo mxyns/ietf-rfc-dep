@@ -2,6 +2,8 @@ use crate::DocIdentifier;
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use std::fmt::Debug;
+use crate::doc::Result;
+use crate::DocError::UnknownMetaError;
 
 pub trait IdContainer {
     type Holder<T>: Serialize + DeserializeOwned + Send + Debug + Clone;
@@ -27,7 +29,7 @@ impl<T> Meta<T>
 where
     T: IdContainer,
 {
-    pub fn from_html(tyype: String, inner_text: Vec<&str>) -> Result<Meta<T>, String> {
+    pub fn from_html(tyype: String, inner_text: Vec<&str>) -> Result<Meta<T>> {
         match tyype.as_str() {
             "updated_by" => {
                 let updaters = Meta::UpdatedBy(T::from_inner_text(inner_text));
@@ -57,7 +59,7 @@ where
                 let known_as = Meta::AlsoKnownAs(inner_text[1].trim().to_string());
                 Ok(known_as)
             }
-            _ => Err(format!("Unknown Type {tyype} {{{:#?}}}", inner_text)),
+            _ => UnknownMetaError(format!("Unknown Type {tyype} {{{:#?}}}", inner_text)).into(),
         }
     }
 }

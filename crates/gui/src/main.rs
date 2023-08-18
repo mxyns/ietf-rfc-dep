@@ -1,3 +1,5 @@
+use std::str::FromStr;
+use reqwest::Url;
 use crate::app::RFCDepApp;
 
 mod app;
@@ -10,6 +12,7 @@ mod table_view;
 mod tabs;
 
 fn main() {
+
     let options = eframe::NativeOptions {
         centered: true,
         ..Default::default()
