@@ -1,14 +1,13 @@
-use std::error::Error;
 use crate::meta::Meta;
 use crate::IdContainer;
 use rayon::prelude::*;
 use regex::bytes::Regex;
 use reqwest::{StatusCode, Url};
 use serde::{Deserialize, Serialize};
-use std::fmt::{Debug, Display, Formatter};
+use std::fmt::{Debug};
 use std::str::FromStr;
-use url::ParseError;
-use crate::DocError::*;
+use rayon::iter::Either;
+use crate::error::{Result, DocError::*};
 
 /* Identify IETF documents by String (internal name) for now */
 pub type DocIdentifier = String;
@@ -49,10 +48,19 @@ impl<C> IetfDoc<C>
     }
 
     pub fn from_name(name: impl Into<String>) -> Result<IetfDoc<C>> {
-        Self::from_html(&Self::id_to_url(name)?)
+        Self::from_html(Either::Left(&Self::id_to_url(name)?))
     }
 
-    pub fn from_html(url: &Url) -> Result<IetfDoc<C>> {
+    pub fn from_summary(summary: Summary) -> Result<IetfDoc<C>> {
+        IetfDoc::from_html(Either::Right(summary))
+    }
+
+    pub fn from_html(source: Either<&Url, Summary>) -> Result<IetfDoc<C>> {
+        let (url, summary_provided) = match source {
+            Either::Left(url) => { (url, false) }
+            Either::Right(ref summary) => { (&summary.url, true) }
+        };
+
         let resp = reqwest::blocking::get(url.as_str()).unwrap();
         let status_code = resp.status();
         if !StatusCode::is_success(&status_code) {
@@ -71,12 +79,22 @@ impl<C> IetfDoc<C>
         // Find Document Title and Name
         let selector = scraper::Selector::parse("#content > h1").unwrap();
         println!("{}", url);
-        let title_elem = document.select(&selector).next().unwrap();
-        let title_text = title_elem.text().collect::<String>();
-        let title_regex = Regex::new(r"^\s+(.+)\s+(.+)\s$").unwrap();
-        let title_captures = title_regex.captures(title_text.as_ref()).unwrap();
-        let title = String::from_utf8(title_captures.get(1).unwrap().as_bytes().to_vec()).unwrap();
-        let name = String::from_utf8(title_captures.get(2).unwrap().as_bytes().to_vec()).unwrap();
+        let summary = if !summary_provided {
+            let title_elem = document.select(&selector).next().unwrap();
+            let title_text = title_elem.text().collect::<String>();
+            let title_regex = Regex::new(r"^\s+(.+)\s+(.+)\s$").unwrap();
+            let title_captures = title_regex.captures(title_text.as_ref()).unwrap();
+            let title = String::from_utf8(title_captures.get(1).unwrap().as_bytes().to_vec()).unwrap();
+            let name = String::from_utf8(title_captures.get(2).unwrap().as_bytes().to_vec()).unwrap();
+
+            Some(
+                Summary {
+                    id: name_to_id(name.as_str()),
+                    url: url.clone(),
+                    title,
+                }
+            )
+        } else { None };
 
         // Find Document Relationship Metadata
         let selector = scraper::Selector::parse("#content > table > tbody.meta.align-top.border-top > tr:nth-child(1) > td:nth-child(4) > div").unwrap();
@@ -122,13 +140,8 @@ impl<C> IetfDoc<C>
             }
         }
 
-        // TODO optional summary to move into here
         let doc = IetfDoc {
-            summary: Summary {
-                id: name_to_id(name.as_str()),
-                url: url.clone(),
-                title,
-            },
+            summary: summary.unwrap_or_else(|| source.right().unwrap()),
             meta: doc_meta,
         };
 

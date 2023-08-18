@@ -69,7 +69,7 @@ impl RFCDepApp {
                         let mut results: Vec<_> = results
                             .par_drain(..)
                             .filter_map(|summary| {
-                                if let Ok(doc) = IetfDoc::from_html(&summary.url) {
+                                if let Ok(doc) = IetfDoc::from_summary(summary) {
                                     Some(doc)
                                 } else {
                                     None

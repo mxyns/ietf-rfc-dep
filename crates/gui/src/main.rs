@@ -1,5 +1,3 @@
-use std::str::FromStr;
-use reqwest::Url;
 use crate::app::RFCDepApp;
 
 mod app;

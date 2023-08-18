@@ -2,8 +2,8 @@ use crate::DocIdentifier;
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use std::fmt::Debug;
-use crate::doc::Result;
-use crate::DocError::UnknownMetaError;
+use crate::error::Result;
+use crate::error::DocError::UnknownMetaError;
 
 pub trait IdContainer {
     type Holder<T>: Serialize + DeserializeOwned + Send + Debug + Clone;
