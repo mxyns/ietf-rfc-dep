@@ -24,6 +24,7 @@ Nothing special:
 [] Vec<Meta> => struct(Meta::*::(_))
 [] use XML rather than HTML => allows for metas on drafts too
 [] better error handling (eg don't panic on req timed-out)
+[] allow downloading files for offline reading (plane mode)
 [] reduce .clone use on IdType
 [] add cli
 [] graph gui

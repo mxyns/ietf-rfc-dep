@@ -25,8 +25,8 @@ pub struct IetfDoc<C>
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Summary {
     pub id: String,
-    // pub revision: String,
-    // pub is_rfc: bool,
+    pub revision: String,
+    pub is_rfc: bool,
     pub url: Url,
     pub title: String,
 }
@@ -77,9 +77,10 @@ impl<C> IetfDoc<C>
         let document = scraper::Html::parse_document(&text);
 
         // Find Document Title and Name
-        let selector = scraper::Selector::parse("#content > h1").unwrap();
         println!("{}", url);
+
         let summary = if !summary_provided {
+            let selector = scraper::Selector::parse("#content > h1").unwrap();
             let title_elem = document.select(&selector).next().unwrap();
             let title_text = title_elem.text().collect::<String>();
             let title_regex = Regex::new(r"^\s+(.+)\s+(.+)\s$").unwrap();
@@ -87,9 +88,22 @@ impl<C> IetfDoc<C>
             let title = String::from_utf8(title_captures.get(1).unwrap().as_bytes().to_vec()).unwrap();
             let name = String::from_utf8(title_captures.get(2).unwrap().as_bytes().to_vec()).unwrap();
 
+            let is_rfc = name.starts_with("rfc");
+            let revision_elem = if is_rfc {
+                let selector = scraper::Selector::parse(".sidebar li.page-item:not(.rfc)").unwrap();
+                document.select(&selector).rev().next().unwrap()
+            } else {
+                let selector = scraper::Selector::parse(".sidebar li.page-item.active").unwrap();
+                document.select(&selector).next().unwrap()
+            };
+
+            let revision = revision_elem.text().collect::<String>();
+
             Some(
                 Summary {
                     id: name_to_id(name.as_str()),
+                    revision,
+                    is_rfc,
                     url: url.clone(),
                     title,
                 }
@@ -190,7 +204,9 @@ impl<C> IetfDoc<C>
                 Summary {
                     url: Self::id_to_url(&id).unwrap(),
                     id,
+                    revision: obj.get("rev").unwrap().as_str().unwrap().to_string(),
                     title: obj.get("title").unwrap().as_str().unwrap().to_string(),
+                    is_rfc: rfc_num.is_some(),
                 }
             })
             .collect();

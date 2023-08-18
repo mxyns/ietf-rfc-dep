@@ -105,7 +105,7 @@ impl RFCDepApp {
                                     self.selected_query_docs.get_mut(idx).unwrap_or(&mut false),
                                     &doc.title,
                                 );
-                                ui.label(&doc.id);
+                                ui.label(format!("{}, rev {}", &doc.id, doc.revision));
                                 ui.hyperlink_to("datatracker", &doc.url);
                             }
                             ui.separator();

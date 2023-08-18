@@ -8,6 +8,8 @@ A `Summary` per doc (rfc or draft only) is extracted from the result: It contain
 * `name`
 * `url`
 * `title`
+* `revision`
+* `is_rfc`
 
 HTML Documents are scraped from https://datatracker.ietf.org/doc/{name}
 Relations to other documents are parsed and stored in `rfc_dep_gui::IetfDoc::meta`, supported `rfc_dep_gui::Meta`s are:
