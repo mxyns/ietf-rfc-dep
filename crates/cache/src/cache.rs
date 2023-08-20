@@ -3,6 +3,7 @@ use std::collections::BTreeMap;
 use std::fmt;
 use std::fmt::Debug;
 use std::hash::Hash;
+use std::ops::Deref;
 
 pub trait CacheIdentifier: Eq + Hash + Ord {}
 
@@ -27,7 +28,18 @@ pub enum CacheReference<IdType> {
     Cached(IdType),
 }
 
-/* debug print for struct CacheReference */
+impl<IdType> Deref for CacheReference<IdType> {
+    type Target = IdType;
+
+    fn deref(&self) -> &Self::Target {
+        match self {
+            CacheReference::Unknown(item)
+            | CacheReference::Cached(item) => { item }
+        }
+    }
+}
+
+/* debug print for enum CacheReference */
 impl<IdType: fmt::Display> Debug for CacheReference<IdType> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {

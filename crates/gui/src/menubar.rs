@@ -3,6 +3,7 @@ use eframe::egui::{Context, Ui};
 use egui_modal::Modal;
 use if_chain::if_chain;
 use std::fs::File;
+use std::time::Duration;
 
 use rfc_dep_cache::{ResolveParams, ResolveTarget};
 use rfc_dep_ietf::IetfDoc;
@@ -179,9 +180,15 @@ impl RFCDepApp {
                     if self.direct_import_name.is_empty() {
                         return;
                     }
-                    if let Ok(doc) = IetfDoc::from_name(&self.direct_import_name) {
+                    let doc = IetfDoc::from_name(&self.direct_import_name);
+                    if let Ok(doc) = doc {
                         self.cache
                             .cache(doc.summary.id.clone(), StatefulDoc::new(doc));
+                    } else {
+                        self.toasts
+                            .error(format!("Could not import {}: {}", &self.direct_import_name, doc.err().unwrap()))
+                            .set_closable(true)
+                            .set_duration(Some(Duration::from_secs(10)));
                     }
                 };
             });

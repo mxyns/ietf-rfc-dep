@@ -1,6 +1,7 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use std::mem;
+use std::ops::Deref;
 
 use rfc_dep_cache::{CacheReference, RelationalEntry, ResolvableEntry};
 use rfc_dep_ietf::{DocIdentifier, IdContainer, IetfDoc, Meta};
@@ -30,6 +31,14 @@ impl From<DocReference> for CacheReference<DocIdentifier> {
 impl From<CacheReference<DocIdentifier>> for DocReference {
     fn from(value: CacheReference<DocIdentifier>) -> Self {
         DocReference(value)
+    }
+}
+
+impl Deref for DocReference {
+    type Target = DocIdentifier;
+
+    fn deref(&self) -> &Self::Target {
+        self.0.deref()
     }
 }
 
@@ -78,6 +87,15 @@ pub(crate) fn update_missing_dep_count(doc: &mut StatefulDoc, new_deps: isize) {
 impl RelationalEntry<DocIdentifier> for StatefulDoc {
     fn get_unknown_relations(&self) -> HashSet<DocIdentifier> {
         let mut to_update = HashSet::new();
+        let mut add_unknown = |item: &CacheReference<DocIdentifier>| {
+            match item {
+                CacheReference::Unknown(id) => {
+                    to_update.insert(id.clone());
+                }
+                CacheReference::Cached(_) => {}
+            };
+        };
+
         for meta in &self.content.meta {
             match meta {
                 Meta::Updates(list)
@@ -85,15 +103,14 @@ impl RelationalEntry<DocIdentifier> for StatefulDoc {
                 | Meta::UpdatedBy(list)
                 | Meta::ObsoletedBy(list) => {
                     for DocReference(item) in list {
-                        match item {
-                            CacheReference::Unknown(id) => {
-                                to_update.insert(id.clone());
-                            }
-                            CacheReference::Cached(_) => {}
-                        };
+                        add_unknown(item);
                     }
                 }
-                Meta::Was(_) | Meta::Replaces(_) | Meta::AlsoKnownAs(_) => {}
+                Meta::Replaces(DocReference(item))
+                | Meta::ReplacedBy(DocReference(item)) => {
+                    add_unknown(item);
+                }
+                Meta::Was(_) | Meta::AlsoKnownAs(_) => {}
             }
         }
 
@@ -102,6 +119,30 @@ impl RelationalEntry<DocIdentifier> for StatefulDoc {
 
     fn update_unknown_references(&mut self, is_known: impl Fn(&DocIdentifier) -> bool) -> isize {
         let mut change = 0;
+
+        let mut update_cache_ref = |cache_ref: &mut CacheReference<DocIdentifier>| {
+            match cache_ref {
+                CacheReference::Unknown(ref mut r) if is_known(r) => {
+                    println!("change +1");
+                    change += 1;
+                    CacheReference::Cached(mem::take(r))
+                }
+                CacheReference::Cached(ref mut r) if !is_known(r) => {
+                    println!("change -1");
+                    change += -1;
+                    CacheReference::Unknown(mem::take(r))
+                }
+                CacheReference::Unknown(ref mut r) => {
+                    println!("still unknown");
+                    CacheReference::Unknown(mem::take(r))
+                }
+                CacheReference::Cached(ref mut r) => {
+                    println!("still known");
+                    CacheReference::Cached(mem::take(r))
+                }
+            }
+        };
+
         for meta in &mut self.content.meta {
             match meta {
                 Meta::Updates(list)
@@ -109,25 +150,14 @@ impl RelationalEntry<DocIdentifier> for StatefulDoc {
                 | Meta::UpdatedBy(list)
                 | Meta::ObsoletedBy(list) => {
                     for DocReference(ref mut cache_ref) in list {
-                        *cache_ref = match cache_ref {
-                            CacheReference::Unknown(ref mut r) if is_known(r) => {
-                                change += 1;
-                                CacheReference::Cached(mem::take(r))
-                            }
-                            CacheReference::Cached(ref mut r) if !is_known(r) => {
-                                change += -1;
-                                CacheReference::Unknown(mem::take(r))
-                            }
-                            CacheReference::Unknown(ref mut r) => {
-                                CacheReference::Unknown(mem::take(r))
-                            }
-                            CacheReference::Cached(ref mut r) => {
-                                CacheReference::Cached(mem::take(r))
-                            }
-                        }
+                        *cache_ref = update_cache_ref(cache_ref);
                     }
                 }
-                Meta::Was(_) | Meta::Replaces(_) | Meta::AlsoKnownAs(_) => {}
+                Meta::Replaces(DocReference(ref mut cache_ref))
+                | Meta::ReplacedBy(DocReference(ref mut cache_ref)) => {
+                    *cache_ref = update_cache_ref(cache_ref);
+                }
+                Meta::Was(_) | Meta::AlsoKnownAs(_) => {}
             }
         }
 
@@ -136,6 +166,14 @@ impl RelationalEntry<DocIdentifier> for StatefulDoc {
 
     fn get_unknown_relations_count(&self) -> usize {
         let mut missing = 0;
+
+        let count_meta = |cache_ref: &CacheReference<_>| {
+            match cache_ref {
+                CacheReference::Unknown(_) => { 1 }
+                CacheReference::Cached(_) => { 0 }
+            }
+        };
+
         for meta in &self.content.meta {
             match meta {
                 Meta::Updates(list)
@@ -143,15 +181,14 @@ impl RelationalEntry<DocIdentifier> for StatefulDoc {
                 | Meta::UpdatedBy(list)
                 | Meta::ObsoletedBy(list) => {
                     for DocReference(item) in list {
-                        match item {
-                            CacheReference::Unknown(_) => {
-                                missing += 1;
-                            }
-                            CacheReference::Cached(_) => {}
-                        };
+                        missing += count_meta(item);
                     }
                 }
-                Meta::Was(_) | Meta::Replaces(_) | Meta::AlsoKnownAs(_) => {}
+                Meta::Replaces(DocReference(item))
+                | Meta::ReplacedBy(DocReference(item)) => {
+                    missing += count_meta(item);
+                }
+                Meta::Was(_) | Meta::AlsoKnownAs(_) => {}
             }
         }
 

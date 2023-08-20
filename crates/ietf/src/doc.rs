@@ -9,7 +9,7 @@ use rayon::prelude::*;
 use regex::bytes::Regex;
 use reqwest::blocking::Response;
 use reqwest::StatusCode;
-use scraper::Html;
+use scraper::{Html, Selector};
 use serde::{Deserialize, Serialize};
 use std::fmt::{Debug, Display};
 
@@ -19,8 +19,8 @@ pub type DocIdentifier = String;
 #[derive(Debug, Clone, Serialize, Deserialize)]
 // C represents the container type used to hold document references
 pub struct IetfDoc<C>
-where
-    C: IdContainer,
+    where
+        C: IdContainer,
 {
     pub summary: Summary,
     pub meta: Vec<Meta<C>>,
@@ -49,10 +49,10 @@ fn http_get<T: reqwest::IntoUrl + Display>(url: T) -> Result<Response> {
     Ok(resp)
 }
 
-// TODO change api to IetfDoc::html/xml/summary::get() -> Result<IetfDoc<C>>
+// TODO better api
 impl<C> IetfDoc<C>
-where
-    C: IdContainer,
+    where
+        C: IdContainer,
 {
     pub fn id_to_url(id: &DocIdentifier) -> Result<SourceUrl> {
         SourceUrl::new(id)
@@ -65,6 +65,17 @@ where
 
     pub fn from_summary(summary: Summary) -> Result<IetfDoc<C>> {
         IetfDoc::from_html(Either::Right(summary))
+    }
+
+    fn xml_is_available(document: &Html) -> bool {
+        let selector = Selector::parse("div.buttonlist a").unwrap();
+        for button in document.select(&selector) {
+            if button.text().any(|text| text.eq("xml")) {
+                return true;
+            }
+        }
+
+        false
     }
 
     fn from_html(source: Either<&SourceUrl, Summary>) -> Result<IetfDoc<C>> {
@@ -104,8 +115,8 @@ where
                     scraper::Selector::parse(".revision-list li.page-item.active").unwrap();
                 document.select(&selector).next()
             }
-            .map(|x| x.text().map(str::trim).collect::<String>())
-            .unwrap_or("00".to_string());
+                .map(|x| x.text().map(str::trim).collect::<String>())
+                .unwrap_or("00".to_string());
 
             Some(Summary {
                 url: Self::id_to_url(&id)?,
@@ -119,11 +130,7 @@ where
         };
         let summary = summary.unwrap_or_else(|| source.right().unwrap());
 
-        // Find Document Relationship Metadata
-
-        // Parse Document Relationship Metadata
-
-        let doc_meta = if summary.is_rfc {
+        let doc_meta = if summary.is_rfc || !Self::xml_is_available(&document) {
             Self::parse_meta_html(&document)?
         } else {
             Self::parse_meta_xml(&summary.url)?
@@ -138,45 +145,52 @@ where
     }
 
     fn parse_meta_html(document: &Html) -> Result<Vec<Meta<C>>> {
-        let selector = scraper::Selector::parse("#content > table > tbody.meta.align-top.border-top > tr:nth-child(1) > td:nth-child(4) > div").unwrap();
-        let meta_elems = document.select(&selector).collect::<Vec<_>>();
+
+        let row_selector = Selector::parse("#content > table > tbody.meta.align-top.border-top > tr").unwrap();
+        let row_name_selector = Selector::parse("th:last-of-type").unwrap();
+        let row_value_selector = Selector::parse("td:not(.edit):last-of-type").unwrap();
+        let meta_elems = document.select(&row_selector).collect::<Vec<_>>();
         let mut doc_meta: Vec<Meta<C>> = Vec::new();
-        for item in meta_elems {
-            let inner_text = item.text().collect::<Vec<_>>();
-            // Skip empty items
-            if inner_text.is_empty() {
-                continue;
-            }
+        for row in meta_elems {
+            let name = row.select(&row_name_selector).next().unwrap().text().collect::<String>();
+            let name = name.trim();
+            let value = row.select(&row_value_selector).next().unwrap();
 
-            // Extract type from Html innerText
-            let tyype = inner_text[0].trim().to_lowercase();
-            let regex = Regex::new(r"\s").unwrap();
-            let tyype = regex.replace_all(tyype.as_bytes(), "_".as_bytes()).to_vec();
-            let tyype = String::from_utf8(tyype).unwrap();
+            let metas: Vec<Result<Meta<C>>> = match name {
+                "Type" => {
+                    value.select(&Selector::parse("div").unwrap()).filter_map(|div| {
+                        let text: Vec<_> = div.text().collect();
+                        if !text.is_empty() {
+                            let tyype = text[0].trim().to_lowercase().replace(' ', "_");
+                            Some(Meta::from_html(tyype, text))
+                        } else { None }
+                    }).collect()
+                }
+                "Replaces" => {
+                    let replaces = value.text()
+                        .map(|x| x.trim())
+                        .filter(|x| !x.is_empty())
+                        .collect();
+                    vec![Meta::from_html("replaces".to_string(), replaces)]
+                }
+                "Replaced by" => {
+                    let replaced_by = value.text()
+                        .map(|x| x.trim())
+                        .filter(|x| !x.is_empty())
+                        .collect();
+                    vec![Meta::from_html("replaced_by".to_string(), replaced_by)]
+                }
+                _ => {
+                    vec![Err(UnknownMeta(name.to_string()))]
+                }
+            };
 
-            let meta = Meta::from_html(tyype, inner_text);
-            if let Ok(meta) = meta {
-                doc_meta.push(meta);
-            } else {
-                println!("Meta: {}", meta.err().unwrap())
-            }
-        }
-
-        let selector = scraper::Selector::parse(
-            "tbody.meta:nth-child(1) > tr:nth-child(4) > td:nth-child(4) > a:nth-child(1)",
-        )
-        .unwrap();
-
-        if let Some(replaces) = document
-            .select(&selector)
-            .next()
-            .map(|el| el.text().collect::<Vec<_>>())
-        {
-            let meta = Meta::from_html("replaces".to_string(), replaces);
-            if let Ok(meta) = meta {
-                doc_meta.push(meta);
-            } else {
-                println!("Meta: {}", meta.err().unwrap())
+            for meta in metas {
+                if let Ok(meta) = meta {
+                    doc_meta.push(meta);
+                } else {
+                    println!("Error: {}", meta.err().unwrap())
+                }
             }
         }
 
@@ -246,8 +260,7 @@ where
             return Lookup(format!(
                 "unsuccessful status http/GET status {}",
                 status_code
-            ))
-            .into();
+            )).into();
         }
 
         let summaries: Vec<Summary> = resp
@@ -289,14 +302,17 @@ where
     pub fn meta_count(&self) -> usize {
         let mut len = 0;
         for meta in &self.meta {
-            match meta {
+            len += match meta {
                 Meta::Updates(list)
                 | Meta::Obsoletes(list)
                 | Meta::UpdatedBy(list)
                 | Meta::ObsoletedBy(list) => {
-                    len += list.len();
+                    list.len()
                 }
-                Meta::Was(_) | Meta::Replaces(_) | Meta::AlsoKnownAs(_) => len += 1,
+                Meta::Was(_)
+                | Meta::Replaces(_)
+                | Meta::ReplacedBy(_)
+                | Meta::AlsoKnownAs(_) => 1,
             }
         }
 
