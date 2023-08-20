@@ -12,8 +12,8 @@ pub trait IdContainer {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum Meta<C>
-    where
-        C: IdContainer,
+where
+    C: IdContainer,
 {
     Updates(Vec<C::Holder<DocIdentifier>>),
     UpdatedBy(Vec<C::Holder<DocIdentifier>>),
@@ -26,8 +26,8 @@ pub enum Meta<C>
 }
 
 impl<C> Meta<C>
-    where
-        C: IdContainer,
+where
+    C: IdContainer,
 {
     fn from_inner_text(lines: Vec<&str>) -> Vec<C::Holder<DocIdentifier>> {
         lines
@@ -60,11 +60,15 @@ impl<C> Meta<C>
                 Ok(was)
             }
             "replaces" => {
-                let replaced = Meta::Replaces(C::Holder::from(name_to_id(inner_text[0].trim().to_string())));
+                let replaced = Meta::Replaces(C::Holder::from(name_to_id(
+                    inner_text[0].trim().to_string(),
+                )));
                 Ok(replaced)
             }
             "replaced_by" => {
-                let replacer = Meta::ReplacedBy(C::Holder::from(name_to_id(inner_text[0].trim().to_string())));
+                let replacer = Meta::ReplacedBy(C::Holder::from(name_to_id(
+                    inner_text[0].trim().to_string(),
+                )));
                 Ok(replacer)
             }
             "also_known_as" => {
@@ -74,7 +78,6 @@ impl<C> Meta<C>
             _ => UnknownMeta(format!("Unknown Meta {tyype} {{{:#?}}}", inner_text)).into(),
         }
     }
-
 
     fn from_xml_values(from: &Attribute) -> Vec<C::Holder<DocIdentifier>> {
         String::from_utf8(from.value.to_ascii_lowercase())
@@ -90,7 +93,12 @@ impl<C> Meta<C>
             b"updates" => Ok(Meta::Updates(Self::from_xml_values(attr))),
             b"obsoletes" => Ok(Meta::Obsoletes(Self::from_xml_values(attr))),
             b"replaces" => Ok(Meta::Replaces(Self::from_xml_values(attr).remove(0))),
-            _ => UnknownMeta(format!("Unknown Meta {:?} {{{:#?}}}", String::from_utf8(attr.key.to_ascii_lowercase()), String::from_utf8(attr.value.to_ascii_lowercase()))).into(),
+            _ => UnknownMeta(format!(
+                "Unknown Meta {:?} {{{:#?}}}",
+                String::from_utf8(attr.key.to_ascii_lowercase()),
+                String::from_utf8(attr.value.to_ascii_lowercase())
+            ))
+            .into(),
         }
     }
 }

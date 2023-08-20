@@ -21,15 +21,7 @@ impl RFCDepApp {
             self.cache = new_cache;
         }
 
-        self.cache.resolve_dependencies(
-            ResolveTarget::All,
-            ResolveParams {
-                print: true,
-                depth: 1,
-                query: false,
-            },
-            update_missing_dep_count,
-        );
+        self.cache.update_relations(|_| false, |_, doc, change| update_missing_dep_count(doc, change))
     }
 
     pub(crate) fn is_resolving(&self) -> bool {

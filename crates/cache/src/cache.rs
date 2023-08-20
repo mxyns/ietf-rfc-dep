@@ -33,8 +33,7 @@ impl<IdType> Deref for CacheReference<IdType> {
 
     fn deref(&self) -> &Self::Target {
         match self {
-            CacheReference::Unknown(item)
-            | CacheReference::Cached(item) => { item }
+            CacheReference::Unknown(item) | CacheReference::Cached(item) => item,
         }
     }
 }

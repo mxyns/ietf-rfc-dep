@@ -106,8 +106,7 @@ impl RelationalEntry<DocIdentifier> for StatefulDoc {
                         add_unknown(item);
                     }
                 }
-                Meta::Replaces(DocReference(item))
-                | Meta::ReplacedBy(DocReference(item)) => {
+                Meta::Replaces(DocReference(item)) | Meta::ReplacedBy(DocReference(item)) => {
                     add_unknown(item);
                 }
                 Meta::Was(_) | Meta::AlsoKnownAs(_) => {}
@@ -120,26 +119,20 @@ impl RelationalEntry<DocIdentifier> for StatefulDoc {
     fn update_unknown_references(&mut self, is_known: impl Fn(&DocIdentifier) -> bool) -> isize {
         let mut change = 0;
 
-        let mut update_cache_ref = |cache_ref: &mut CacheReference<DocIdentifier>| {
-            match cache_ref {
-                CacheReference::Unknown(ref mut r) if is_known(r) => {
-                    println!("change +1");
-                    change += 1;
-                    CacheReference::Cached(mem::take(r))
-                }
-                CacheReference::Cached(ref mut r) if !is_known(r) => {
-                    println!("change -1");
-                    change += -1;
-                    CacheReference::Unknown(mem::take(r))
-                }
-                CacheReference::Unknown(ref mut r) => {
-                    println!("still unknown");
-                    CacheReference::Unknown(mem::take(r))
-                }
-                CacheReference::Cached(ref mut r) => {
-                    println!("still known");
-                    CacheReference::Cached(mem::take(r))
-                }
+        let mut update_cache_ref = |cache_ref: &mut CacheReference<DocIdentifier>| match cache_ref {
+            CacheReference::Unknown(ref mut r) if is_known(r) => {
+                change += 1;
+                CacheReference::Cached(mem::take(r))
+            }
+            CacheReference::Cached(ref mut r) if !is_known(r) => {
+                change += -1;
+                CacheReference::Unknown(mem::take(r))
+            }
+            CacheReference::Unknown(ref mut r) => {
+                CacheReference::Unknown(mem::take(r))
+            }
+            CacheReference::Cached(ref mut r) => {
+                CacheReference::Cached(mem::take(r))
             }
         };
 
@@ -167,11 +160,9 @@ impl RelationalEntry<DocIdentifier> for StatefulDoc {
     fn get_unknown_relations_count(&self) -> usize {
         let mut missing = 0;
 
-        let count_meta = |cache_ref: &CacheReference<_>| {
-            match cache_ref {
-                CacheReference::Unknown(_) => { 1 }
-                CacheReference::Cached(_) => { 0 }
-            }
+        let count_meta = |cache_ref: &CacheReference<_>| match cache_ref {
+            CacheReference::Unknown(_) => 1,
+            CacheReference::Cached(_) => 0,
         };
 
         for meta in &self.content.meta {
@@ -184,8 +175,7 @@ impl RelationalEntry<DocIdentifier> for StatefulDoc {
                         missing += count_meta(item);
                     }
                 }
-                Meta::Replaces(DocReference(item))
-                | Meta::ReplacedBy(DocReference(item)) => {
+                Meta::Replaces(DocReference(item)) | Meta::ReplacedBy(DocReference(item)) => {
                     missing += count_meta(item);
                 }
                 Meta::Was(_) | Meta::AlsoKnownAs(_) => {}

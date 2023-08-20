@@ -132,24 +132,17 @@ where
                 HashSet::<IdType>::new()
             };
 
-            // Copy cache to lookup already existing entries when linking
-            let old_ids: HashSet<IdType> = self.map.keys().cloned().collect();
-
-            // Update current cache with new entries and new relations
-            for (id, doc) in &mut self.into_iter() {
-                let changed = doc.update_unknown_references(|meta_id| {
-                    id_doc_new.get(meta_id).is_some() || old_ids.contains(meta_id)
-                });
-
-                if changed != 0 {
+            self.update_relations(
+                |meta_id| id_doc_new.get(meta_id).is_some(),
+                |id, value, change| {
                     last_updated_opt.as_mut().map(|last_updated| {
                         last_updated.insert(id.clone());
                         last_updated
                     });
 
-                    on_rel_change(doc, changed);
-                }
-            }
+                    on_rel_change(value, change);
+                },
+            );
 
             depth += 1;
 
@@ -159,6 +152,30 @@ where
             if depth >= max_depth {
                 println!("Reached max depth = {max_depth}");
                 break;
+            }
+        }
+    }
+
+    // id_doc_new.get(meta_id).is_some()
+    pub fn update_relations<OnChangeFn, IsKnownFn>(
+        &mut self,
+        is_known: IsKnownFn,
+        mut on_change: OnChangeFn,
+    ) where
+        IsKnownFn: Fn(&IdType) -> bool,
+        OnChangeFn: FnMut(&IdType, &mut ValueType, isize),
+    {
+        // Copy cache to lookup already existing entries when linking
+        let old_ids: HashSet<IdType> = self.map.keys().cloned().collect();
+
+        // Update current cache with new entries and new relations
+        for (id, doc) in &mut self.into_iter() {
+            let changed = doc.update_unknown_references(|meta_id| {
+                old_ids.contains(meta_id) || is_known(meta_id)
+            });
+
+            if changed != 0 {
+                on_change(id, doc, changed);
             }
         }
     }

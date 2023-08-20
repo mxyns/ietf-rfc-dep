@@ -19,8 +19,8 @@ pub type DocIdentifier = String;
 #[derive(Debug, Clone, Serialize, Deserialize)]
 // C represents the container type used to hold document references
 pub struct IetfDoc<C>
-    where
-        C: IdContainer,
+where
+    C: IdContainer,
 {
     pub summary: Summary,
     pub meta: Vec<Meta<C>>,
@@ -51,8 +51,8 @@ fn http_get<T: reqwest::IntoUrl + Display>(url: T) -> Result<Response> {
 
 // TODO better api
 impl<C> IetfDoc<C>
-    where
-        C: IdContainer,
+where
+    C: IdContainer,
 {
     pub fn id_to_url(id: &DocIdentifier) -> Result<SourceUrl> {
         SourceUrl::new(id)
@@ -115,8 +115,8 @@ impl<C> IetfDoc<C>
                     scraper::Selector::parse(".revision-list li.page-item.active").unwrap();
                 document.select(&selector).next()
             }
-                .map(|x| x.text().map(str::trim).collect::<String>())
-                .unwrap_or("00".to_string());
+            .map(|x| x.text().map(str::trim).collect::<String>())
+            .unwrap_or("00".to_string());
 
             Some(Summary {
                 url: Self::id_to_url(&id)?,
@@ -145,36 +145,46 @@ impl<C> IetfDoc<C>
     }
 
     fn parse_meta_html(document: &Html) -> Result<Vec<Meta<C>>> {
-
-        let row_selector = Selector::parse("#content > table > tbody.meta.align-top.border-top > tr").unwrap();
+        let row_selector =
+            Selector::parse("#content > table > tbody.meta.align-top.border-top > tr").unwrap();
         let row_name_selector = Selector::parse("th:last-of-type").unwrap();
         let row_value_selector = Selector::parse("td:not(.edit):last-of-type").unwrap();
         let meta_elems = document.select(&row_selector).collect::<Vec<_>>();
         let mut doc_meta: Vec<Meta<C>> = Vec::new();
         for row in meta_elems {
-            let name = row.select(&row_name_selector).next().unwrap().text().collect::<String>();
+            let name = row
+                .select(&row_name_selector)
+                .next()
+                .unwrap()
+                .text()
+                .collect::<String>();
             let name = name.trim();
             let value = row.select(&row_value_selector).next().unwrap();
 
             let metas: Vec<Result<Meta<C>>> = match name {
-                "Type" => {
-                    value.select(&Selector::parse("div").unwrap()).filter_map(|div| {
+                "Type" => value
+                    .select(&Selector::parse("div").unwrap())
+                    .filter_map(|div| {
                         let text: Vec<_> = div.text().collect();
                         if !text.is_empty() {
                             let tyype = text[0].trim().to_lowercase().replace(' ', "_");
                             Some(Meta::from_html(tyype, text))
-                        } else { None }
-                    }).collect()
-                }
+                        } else {
+                            None
+                        }
+                    })
+                    .collect(),
                 "Replaces" => {
-                    let replaces = value.text()
+                    let replaces = value
+                        .text()
                         .map(|x| x.trim())
                         .filter(|x| !x.is_empty())
                         .collect();
                     vec![Meta::from_html("replaces".to_string(), replaces)]
                 }
                 "Replaced by" => {
-                    let replaced_by = value.text()
+                    let replaced_by = value
+                        .text()
                         .map(|x| x.trim())
                         .filter(|x| !x.is_empty())
                         .collect();
@@ -260,7 +270,8 @@ impl<C> IetfDoc<C>
             return Lookup(format!(
                 "unsuccessful status http/GET status {}",
                 status_code
-            )).into();
+            ))
+            .into();
         }
 
         let summaries: Vec<Summary> = resp
@@ -306,13 +317,8 @@ impl<C> IetfDoc<C>
                 Meta::Updates(list)
                 | Meta::Obsoletes(list)
                 | Meta::UpdatedBy(list)
-                | Meta::ObsoletedBy(list) => {
-                    list.len()
-                }
-                Meta::Was(_)
-                | Meta::Replaces(_)
-                | Meta::ReplacedBy(_)
-                | Meta::AlsoKnownAs(_) => 1,
+                | Meta::ObsoletedBy(list) => list.len(),
+                Meta::Was(_) | Meta::Replaces(_) | Meta::ReplacedBy(_) | Meta::AlsoKnownAs(_) => 1,
             }
         }
 

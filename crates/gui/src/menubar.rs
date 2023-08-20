@@ -186,7 +186,11 @@ impl RFCDepApp {
                             .cache(doc.summary.id.clone(), StatefulDoc::new(doc));
                     } else {
                         self.toasts
-                            .error(format!("Could not import {}: {}", &self.direct_import_name, doc.err().unwrap()))
+                            .error(format!(
+                                "Could not import {}: {}",
+                                &self.direct_import_name,
+                                doc.err().unwrap()
+                            ))
                             .set_closable(true)
                             .set_duration(Some(Duration::from_secs(10)));
                     }
