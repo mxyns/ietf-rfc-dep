@@ -23,10 +23,13 @@ impl<IdType: CacheIdentifier, ValueType> Default for Cache<IdType, ValueType> {
 }
 
 #[derive(Clone, Serialize, Deserialize)]
+#[serde(untagged)]
 pub enum CacheReference<IdType> {
     Unknown(IdType),
     Cached(IdType),
 }
+
+
 
 impl<IdType> Deref for CacheReference<IdType> {
     type Target = IdType;

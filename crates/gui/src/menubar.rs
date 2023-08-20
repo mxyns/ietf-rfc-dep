@@ -24,9 +24,9 @@ impl RFCDepApp {
                         .pick_file();
                     if let Ok(file) = File::open(path);
                     then {
-                        self.update_cache(Some(
-                            serde_json::from_reader(file).unwrap()
-                        ));
+                        let new_cache = serde_json::from_reader(file).unwrap();
+                        println!("{:#?}", new_cache);
+                        self.update_cache(Some(new_cache), true);
                     }
                 }
 
@@ -94,7 +94,7 @@ impl RFCDepApp {
                     ui.add_enabled_ui(self.list_selected_count > 0, |ui| {
                         if ui.button("Remove selected").clicked() {
                             self.cache.retain(|_, state| !state.is_selected);
-                            self.update_cache(None);
+                            self.update_cache(None, false);
                             self.list_selected_count = 0;
                         }
                     });

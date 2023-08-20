@@ -121,17 +121,21 @@ impl RelationalEntry<DocIdentifier> for StatefulDoc {
 
         let mut update_cache_ref = |cache_ref: &mut CacheReference<DocIdentifier>| match cache_ref {
             CacheReference::Unknown(ref mut r) if is_known(r) => {
+                println!("new known");
                 change += 1;
                 CacheReference::Cached(mem::take(r))
             }
             CacheReference::Cached(ref mut r) if !is_known(r) => {
+                println!("new unknown");
                 change += -1;
                 CacheReference::Unknown(mem::take(r))
             }
             CacheReference::Unknown(ref mut r) => {
+                println!("unknown");
                 CacheReference::Unknown(mem::take(r))
             }
             CacheReference::Cached(ref mut r) => {
+                println!("known");
                 CacheReference::Cached(mem::take(r))
             }
         };
