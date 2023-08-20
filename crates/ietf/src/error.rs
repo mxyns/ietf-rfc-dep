@@ -4,25 +4,25 @@ use DocError::*;
 
 pub type Result<T> = std::result::Result<T, DocError>;
 pub enum DocError {
-    UrlError(String),
-    QueryError(String),
-    LookupError(String),
-    UnknownMetaError(String)
+    Url(String),
+    Query(String),
+    Lookup(String),
+    UnknownMeta(String),
 }
 
 impl DocError {
     fn name(&self) -> &'static str {
         match self {
-            UrlError(_) => { "UrlError" }
-            QueryError(_) => { "QueryError" }
-            LookupError(_) => { "LookupError" }
-            UnknownMetaError(_) => { "UnknownMetaError" }
+            Url(_) => "UrlError",
+            Query(_) => "QueryError",
+            Lookup(_) => "LookupError",
+            UnknownMeta(_) => "UnknownMetaError",
         }
     }
 
     fn description(&self) -> &str {
         match self {
-            UnknownMetaError(s) | LookupError(s) | QueryError(s) | UrlError(s) => { s.as_str() }
+            UnknownMeta(s) | Lookup(s) | Query(s) | Url(s) => s.as_str(),
         }
     }
 }
@@ -32,7 +32,6 @@ impl From<DocError> for String {
         value.to_string()
     }
 }
-
 
 impl Debug for DocError {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
@@ -56,6 +55,12 @@ impl<T> From<DocError> for Result<T> {
 
 impl From<url::ParseError> for DocError {
     fn from(value: url::ParseError) -> Self {
-        UrlError(format!("{}", value))
+        Url(format!("{}", value))
+    }
+}
+
+impl From<reqwest::Error> for DocError {
+    fn from(value: reqwest::Error) -> Self {
+        Query(value.to_string())
     }
 }

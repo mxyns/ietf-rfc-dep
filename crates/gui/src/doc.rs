@@ -3,7 +3,7 @@ use std::collections::HashSet;
 use std::mem;
 
 use rfc_dep_cache::{CacheReference, RelationalEntry, ResolvableEntry};
-use rfc_dep_ietf::{name_to_id, DocIdentifier, IdContainer, IetfDoc, Meta};
+use rfc_dep_ietf::{DocIdentifier, IdContainer, IetfDoc, Meta};
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 /* Type Wrapper needed because CacheReference is from rfc_dep_cache
@@ -13,14 +13,11 @@ pub struct DocReference(pub CacheReference<DocIdentifier>);
 /* make DocReference an IdContainer to allow it to be contained in IetfDoc::Meta */
 impl IdContainer for DocReference {
     type Holder<T> = DocReference;
+}
 
-    fn from_inner_text(lines: Vec<&str>) -> Vec<Self::Holder<DocIdentifier>> {
-        lines
-            .into_iter()
-            .skip(1)
-            .step_by(2)
-            .map(|x| CacheReference::Unknown(name_to_id(x)).into())
-            .collect()
+impl From<DocIdentifier> for DocReference {
+    fn from(value: DocIdentifier) -> Self {
+        CacheReference::Unknown(value).into()
     }
 }
 

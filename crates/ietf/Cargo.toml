@@ -9,6 +9,7 @@ edition = "2021"
 # For http queries to datatracker
 reqwest = { version = "0.11", features = ["blocking", "json"] }
 url = { version = "2.4.0", features = [ "serde" ] }
+fast-xml = { version = "0.23.1" }
 tokio = { version = "1.29.1", features = ["full"] }
 
 # For html parsing

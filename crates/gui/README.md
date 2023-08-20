@@ -22,9 +22,11 @@ Nothing special:
 ## TODO
 [] reorganize Meta for more efficient lookups
 [] Vec<Meta> => struct(Meta::*::(_))
-[] use XML rather than HTML => allows for metas on drafts too
-[] better error handling (eg don't panic on req timed-out)
+[] use XML rather than HTML => allows for metas on drafts too => some don't have the XML version available (rfc7854)
+        => only attempt getting metas for drafts from xml
 [] allow downloading files for offline reading (plane mode)
+[] real tabs
 [] reduce .clone use on IdType
 [] add cli
 [] graph gui
+[x] better error handling (eg don't panic on req timed-out)

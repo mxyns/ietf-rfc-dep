@@ -106,7 +106,7 @@ impl RFCDepApp {
                                     &doc.title,
                                 );
                                 ui.label(format!("{}, rev {}", &doc.id, doc.revision));
-                                ui.hyperlink_to("datatracker", &doc.url);
+                                ui.hyperlink_to("datatracker", doc.url.html());
                             }
                             ui.separator();
                         },

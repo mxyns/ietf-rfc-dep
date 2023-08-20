@@ -1,6 +1,7 @@
 mod doc;
-mod meta;
 mod error;
+mod meta;
+mod url;
 
 pub use doc::DocIdentifier;
 pub use doc::*;

@@ -11,8 +11,9 @@ edition = "2021"
 rfc-dep-cache = { path = "../cache" }
 rfc-dep-ietf = { path = "../ietf" }
 
-serde = {version = "1.0.175"}
-serde_json = {version = "1.0.103"}
+serde = { version = "1.0.175" }
+serde_json = { version = "1.0.103" }
+
 # For gui
 eframe = "0.22.0"
 # For gui table
@@ -26,7 +27,7 @@ egui-notify = "0.7.0"
 once_cell = "1.18.0"
 
 # Parallel computation
-rayon = { version= "1.7.0" }
+rayon = { version = "1.7.0" }
 
 # Sugar
 if_chain = "1.0.2"

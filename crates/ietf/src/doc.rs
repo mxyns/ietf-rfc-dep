@@ -1,13 +1,17 @@
+use crate::error::{DocError::*, Result};
 use crate::meta::Meta;
+use crate::url::SourceUrl;
 use crate::IdContainer;
+use fast_xml::events::Event;
+use fast_xml::Reader;
+use rayon::iter::Either;
 use rayon::prelude::*;
 use regex::bytes::Regex;
-use reqwest::{StatusCode, Url};
+use reqwest::blocking::Response;
+use reqwest::StatusCode;
+use scraper::Html;
 use serde::{Deserialize, Serialize};
-use std::fmt::{Debug};
-use std::str::FromStr;
-use rayon::iter::Either;
-use crate::error::{Result, DocError::*};
+use std::fmt::{Debug, Display};
 
 /* Identify IETF documents by String (internal name) for now */
 pub type DocIdentifier = String;
@@ -15,8 +19,8 @@ pub type DocIdentifier = String;
 #[derive(Debug, Clone, Serialize, Deserialize)]
 // C represents the container type used to hold document references
 pub struct IetfDoc<C>
-    where
-        C: IdContainer,
+where
+    C: IdContainer,
 {
     pub summary: Summary,
     pub meta: Vec<Meta<C>>,
@@ -27,94 +31,115 @@ pub struct Summary {
     pub id: String,
     pub revision: String,
     pub is_rfc: bool,
-    pub url: Url,
+    pub url: SourceUrl,
     pub title: String,
 }
 
-pub fn name_to_id(name: &str) -> DocIdentifier {
-    name.to_string().replace(' ', "").to_lowercase()
+pub fn name_to_id(name: impl Into<String>) -> DocIdentifier {
+    name.into().replace(' ', "").to_lowercase()
 }
 
-impl<C> IetfDoc<C>
-    where
-        C: IdContainer,
-{
-    pub fn id_to_url_str(id: impl Into<String>) -> String {
-        format!("https://datatracker.ietf.org/doc/{}", id.into())
+fn http_get<T: reqwest::IntoUrl + Display>(url: T) -> Result<Response> {
+    let resp = reqwest::blocking::get(url)?;
+    let status_code = resp.status();
+    if !StatusCode::is_success(&status_code) {
+        return Query(format!("Error querying {}: {}", resp.url(), status_code)).into();
     }
 
-    pub fn id_to_url(id: impl Into<String>) -> Result<Url> {
-        Ok(Url::from_str(Self::id_to_url_str(id).as_str())?)
+    Ok(resp)
+}
+
+// TODO change api to IetfDoc::html/xml/summary::get() -> Result<IetfDoc<C>>
+impl<C> IetfDoc<C>
+where
+    C: IdContainer,
+{
+    pub fn id_to_url(id: &DocIdentifier) -> Result<SourceUrl> {
+        SourceUrl::new(id)
     }
 
     pub fn from_name(name: impl Into<String>) -> Result<IetfDoc<C>> {
-        Self::from_html(Either::Left(&Self::id_to_url(name)?))
+        let source = Self::id_to_url(&name.into())?;
+        IetfDoc::from_html(Either::Left(&source))
     }
 
     pub fn from_summary(summary: Summary) -> Result<IetfDoc<C>> {
         IetfDoc::from_html(Either::Right(summary))
     }
 
-    pub fn from_html(source: Either<&Url, Summary>) -> Result<IetfDoc<C>> {
+    fn from_html(source: Either<&SourceUrl, Summary>) -> Result<IetfDoc<C>> {
         let (url, summary_provided) = match source {
-            Either::Left(url) => { (url, false) }
-            Either::Right(ref summary) => { (&summary.url, true) }
+            Either::Left(url) => (url.html(), false),
+            Either::Right(ref summary) => (summary.url.html(), true),
         };
 
-        let resp = reqwest::blocking::get(url.as_str()).unwrap();
-        let status_code = resp.status();
-        if !StatusCode::is_success(&status_code) {
-            return QueryError(format!("Error querying {}: {}", url, status_code)).into();
-        }
+        let resp = http_get(url.as_str())?;
         if resp.url().path() == "/doc/search" {
-            return QueryError(format!("Error querying {}: document doesn't exist", url)).into();
+            return Query(format!("Error querying {}: document doesn't exist", url)).into();
         }
 
-        println!("{}", status_code);
-        println!("{:#?}", resp);
-
-        let text = resp.text().unwrap();
-        let document = scraper::Html::parse_document(&text);
+        let text = resp.text()?;
+        let document = Html::parse_document(&text);
 
         // Find Document Title and Name
-        println!("{}", url);
-
         let summary = if !summary_provided {
             let selector = scraper::Selector::parse("#content > h1").unwrap();
             let title_elem = document.select(&selector).next().unwrap();
             let title_text = title_elem.text().collect::<String>();
             let title_regex = Regex::new(r"^\s+(.+)\s+(.+)\s$").unwrap();
             let title_captures = title_regex.captures(title_text.as_ref()).unwrap();
-            let title = String::from_utf8(title_captures.get(1).unwrap().as_bytes().to_vec()).unwrap();
-            let name = String::from_utf8(title_captures.get(2).unwrap().as_bytes().to_vec()).unwrap();
+            let title =
+                String::from_utf8(title_captures.get(1).unwrap().as_bytes().to_vec()).unwrap();
+            let name =
+                String::from_utf8(title_captures.get(2).unwrap().as_bytes().to_vec()).unwrap();
+            let id = name_to_id(name);
 
-            let is_rfc = name.starts_with("rfc");
-            let revision_elem = if is_rfc {
-                let selector = scraper::Selector::parse(".sidebar li.page-item:not(.rfc)").unwrap();
-                document.select(&selector).rev().next().unwrap()
+            let is_rfc = id.starts_with("rfc");
+            let revision = if is_rfc {
+                let selector =
+                    scraper::Selector::parse(".revision-list li.page-item:not(.rfc)").unwrap();
+                document.select(&selector).last()
             } else {
-                let selector = scraper::Selector::parse(".sidebar li.page-item.active").unwrap();
-                document.select(&selector).next().unwrap()
-            };
+                let selector =
+                    scraper::Selector::parse(".revision-list li.page-item.active").unwrap();
+                document.select(&selector).next()
+            }
+            .map(|x| x.text().map(str::trim).collect::<String>())
+            .unwrap_or("00".to_string());
 
-            let revision = revision_elem.text().collect::<String>();
-
-            Some(
-                Summary {
-                    id: name_to_id(name.as_str()),
-                    revision,
-                    is_rfc,
-                    url: url.clone(),
-                    title,
-                }
-            )
-        } else { None };
+            Some(Summary {
+                url: Self::id_to_url(&id)?,
+                id, // includes revision (for drafts)
+                revision,
+                is_rfc,
+                title,
+            })
+        } else {
+            None
+        };
+        let summary = summary.unwrap_or_else(|| source.right().unwrap());
 
         // Find Document Relationship Metadata
-        let selector = scraper::Selector::parse("#content > table > tbody.meta.align-top.border-top > tr:nth-child(1) > td:nth-child(4) > div").unwrap();
-        let meta_elems = document.select(&selector).collect::<Vec<_>>();
 
         // Parse Document Relationship Metadata
+
+        let doc_meta = if summary.is_rfc {
+            Self::parse_meta_html(&document)?
+        } else {
+            Self::parse_meta_xml(&summary.url)?
+        };
+
+        let doc = IetfDoc {
+            summary,
+            meta: doc_meta,
+        };
+
+        Ok(doc)
+    }
+
+    fn parse_meta_html(document: &Html) -> Result<Vec<Meta<C>>> {
+        let selector = scraper::Selector::parse("#content > table > tbody.meta.align-top.border-top > tr:nth-child(1) > td:nth-child(4) > div").unwrap();
+        let meta_elems = document.select(&selector).collect::<Vec<_>>();
         let mut doc_meta: Vec<Meta<C>> = Vec::new();
         for item in meta_elems {
             let inner_text = item.text().collect::<Vec<_>>();
@@ -140,7 +165,8 @@ impl<C> IetfDoc<C>
         let selector = scraper::Selector::parse(
             "tbody.meta:nth-child(1) > tr:nth-child(4) > td:nth-child(4) > a:nth-child(1)",
         )
-            .unwrap();
+        .unwrap();
+
         if let Some(replaces) = document
             .select(&selector)
             .next()
@@ -154,17 +180,54 @@ impl<C> IetfDoc<C>
             }
         }
 
-        let doc = IetfDoc {
-            summary: summary.unwrap_or_else(|| source.right().unwrap()),
-            meta: doc_meta,
-        };
+        Ok(doc_meta)
+    }
 
-        Ok(doc)
+    // used only on drafts to get the metas
+    fn parse_meta_xml(url: &SourceUrl) -> Result<Vec<Meta<C>>> {
+        let resp = http_get(url.xml().clone())?;
+        let bytes = resp.bytes()?;
+        let mut xml = Reader::from_bytes(bytes.as_ref());
+        let mut buf = Vec::new();
+        let mut metas: Vec<Meta<C>> = Vec::new();
+
+        loop {
+            match xml.read_event(&mut buf) {
+                Ok(Event::Start(ref e)) if e.name() == b"rfc" => {
+                    for attribute in e.attributes() {
+                        match attribute {
+                            Ok(ref a) => {
+                                let meta = Meta::from_xml(a);
+                                if let Ok(meta) = meta {
+                                    metas.push(meta);
+                                } else {
+                                    println!("{}", meta.err().unwrap())
+                                }
+                            }
+                            Err(e) => {
+                                println!("{}", e);
+                            }
+                        }
+                    }
+                    break;
+                }
+                Ok(Event::Eof) => {
+                    break;
+                }
+                Ok(_) => {}
+                Err(e) => {
+                    println!("{}", e);
+                }
+            }
+            buf.clear();
+        }
+
+        Ok(metas)
     }
 
     pub fn lookup(title: &str, limit: usize, include_drafts: bool) -> Result<Vec<Summary>> {
         if title.is_empty() {
-            return LookupError("no query".to_string()).into();
+            return Lookup("no query".to_string()).into();
         }
 
         let rfc_only = if include_drafts { "" } else { "&states__in=3" };
@@ -175,12 +238,16 @@ impl<C> IetfDoc<C>
         let resp = if let Ok(resp) = resp {
             resp
         } else {
-            return LookupError(format!("could not http/GET {}", resp.err().unwrap())).into();
+            return Lookup(format!("could not http/GET {}", resp.err().unwrap())).into();
         };
 
         let status_code = &resp.status();
         if !StatusCode::is_success(status_code) {
-            return LookupError(format!("unsuccessful status http/GET status {}", status_code)).into();
+            return Lookup(format!(
+                "unsuccessful status http/GET status {}",
+                status_code
+            ))
+            .into();
         }
 
         let summaries: Vec<Summary> = resp
@@ -192,19 +259,22 @@ impl<C> IetfDoc<C>
             .unwrap()
             .par_drain(..)
             .map(|obj| {
-                println!("{:#?}", obj);
                 let rfc_num = obj.get("rfc");
+                let revision = obj.get("rev").unwrap().as_str().unwrap().to_string();
                 let id = if rfc_num.is_some_and(|val| !val.is_null()) {
-                    println!("{:#?}", rfc_num);
                     format!("rfc{}", rfc_num.unwrap().as_str().unwrap())
                 } else {
-                    obj.get("name").unwrap().as_str().unwrap().into()
+                    format!(
+                        "{}-{}",
+                        obj.get("name").unwrap().as_str().unwrap(),
+                        revision
+                    )
                 };
 
                 Summary {
                     url: Self::id_to_url(&id).unwrap(),
                     id,
-                    revision: obj.get("rev").unwrap().as_str().unwrap().to_string(),
+                    revision,
                     title: obj.get("title").unwrap().as_str().unwrap().to_string(),
                     is_rfc: rfc_num.is_some(),
                 }
