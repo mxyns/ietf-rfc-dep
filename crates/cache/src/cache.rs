@@ -22,14 +22,21 @@ impl<IdType: CacheIdentifier, ValueType> Default for Cache<IdType, ValueType> {
     }
 }
 
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize, Hash, PartialEq, Eq)]
 #[serde(untagged)]
 pub enum CacheReference<IdType> {
     Unknown(IdType),
     Cached(IdType),
 }
 
-
+impl<IdType> CacheReference<IdType> {
+    pub fn get_mut(&mut self) -> &mut IdType {
+        match self {
+            CacheReference::Unknown(ref mut id) => { id }
+            CacheReference::Cached(ref mut id) => { id }
+        }
+    }
+}
 
 impl<IdType> Deref for CacheReference<IdType> {
     type Target = IdType;

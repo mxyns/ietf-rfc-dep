@@ -1,3 +1,4 @@
+use std::collections::HashSet;
 use crate::error::DocError::UnknownMeta;
 use crate::error::Result;
 use crate::{name_to_id, DocIdentifier};
@@ -5,9 +6,10 @@ use fast_xml::events::attributes::Attribute;
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use std::fmt::Debug;
+use std::hash::Hash;
 
 pub trait IdContainer {
-    type Holder<T>: Serialize + DeserializeOwned + Send + Debug + Clone + From<DocIdentifier>;
+    type Holder<T>: Serialize + DeserializeOwned + Send + Debug + Clone + From<DocIdentifier> + Eq + Hash;
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -15,10 +17,10 @@ pub enum Meta<C>
 where
     C: IdContainer,
 {
-    Updates(Vec<C::Holder<DocIdentifier>>),
-    UpdatedBy(Vec<C::Holder<DocIdentifier>>),
-    Obsoletes(Vec<C::Holder<DocIdentifier>>),
-    ObsoletedBy(Vec<C::Holder<DocIdentifier>>),
+    Updates(HashSet<C::Holder<DocIdentifier>>),
+    UpdatedBy(HashSet<C::Holder<DocIdentifier>>),
+    Obsoletes(HashSet<C::Holder<DocIdentifier>>),
+    ObsoletedBy(HashSet<C::Holder<DocIdentifier>>),
     AlsoKnownAs(DocIdentifier),
     Replaces(C::Holder<DocIdentifier>),
     ReplacedBy(C::Holder<DocIdentifier>),
@@ -29,7 +31,7 @@ impl<C> Meta<C>
 where
     C: IdContainer,
 {
-    fn from_inner_text(lines: Vec<&str>) -> Vec<C::Holder<DocIdentifier>> {
+    fn from_inner_text(lines: Vec<&str>) -> HashSet<C::Holder<DocIdentifier>> {
         lines
             .into_iter()
             .skip(1)
@@ -79,7 +81,7 @@ where
         }
     }
 
-    fn from_xml_values(from: &Attribute) -> Vec<C::Holder<DocIdentifier>> {
+    fn from_xml_values(from: &Attribute) -> HashSet<C::Holder<DocIdentifier>> {
         String::from_utf8(from.value.to_ascii_lowercase())
             .unwrap()
             .split(',')
@@ -92,7 +94,7 @@ where
         match attr.key {
             b"updates" => Ok(Meta::Updates(Self::from_xml_values(attr))),
             b"obsoletes" => Ok(Meta::Obsoletes(Self::from_xml_values(attr))),
-            b"replaces" => Ok(Meta::Replaces(Self::from_xml_values(attr).remove(0))),
+            b"replaces" => Ok(Meta::Replaces(Self::from_xml_values(attr).into_iter().next().unwrap())),
             _ => UnknownMeta(format!(
                 "Unknown Meta {:?} {{{:#?}}}",
                 String::from_utf8(attr.key.to_ascii_lowercase()),

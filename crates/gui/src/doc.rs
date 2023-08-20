@@ -6,7 +6,7 @@ use std::ops::Deref;
 use rfc_dep_cache::{CacheReference, RelationalEntry, ResolvableEntry};
 use rfc_dep_ietf::{DocIdentifier, IdContainer, IetfDoc, Meta};
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize, Hash, PartialEq, Eq)]
 /* Type Wrapper needed because CacheReference is from rfc_dep_cache
  * and IdContainer is from rfc_dep_doc */
 pub struct DocReference(pub CacheReference<DocIdentifier>);
@@ -39,6 +39,18 @@ impl Deref for DocReference {
 
     fn deref(&self) -> &Self::Target {
         self.0.deref()
+    }
+}
+
+impl DocReference {
+    fn get_mut_id(&mut self) -> &mut DocIdentifier {
+        let DocReference(ref mut cache) = self;
+        cache.get_mut()
+    }
+
+    fn get_mut(&mut self) -> &mut CacheReference<DocIdentifier> {
+        let DocReference(ref mut cache) = self;
+        cache
     }
 }
 
@@ -121,34 +133,32 @@ impl RelationalEntry<DocIdentifier> for StatefulDoc {
 
         let mut update_cache_ref = |cache_ref: &mut CacheReference<DocIdentifier>| match cache_ref {
             CacheReference::Unknown(ref mut r) if is_known(r) => {
-                println!("new known");
                 change += 1;
                 CacheReference::Cached(mem::take(r))
             }
             CacheReference::Cached(ref mut r) if !is_known(r) => {
-                println!("new unknown");
                 change += -1;
                 CacheReference::Unknown(mem::take(r))
             }
             CacheReference::Unknown(ref mut r) => {
-                println!("unknown");
                 CacheReference::Unknown(mem::take(r))
             }
             CacheReference::Cached(ref mut r) => {
-                println!("known");
                 CacheReference::Cached(mem::take(r))
             }
         };
 
         for meta in &mut self.content.meta {
             match meta {
-                Meta::Updates(list)
-                | Meta::Obsoletes(list)
-                | Meta::UpdatedBy(list)
-                | Meta::ObsoletedBy(list) => {
-                    for DocReference(ref mut cache_ref) in list {
-                        *cache_ref = update_cache_ref(cache_ref);
-                    }
+                Meta::Updates(set)
+                | Meta::Obsoletes(set)
+                | Meta::UpdatedBy(set)
+                | Meta::ObsoletedBy(set) => {
+                    let mut values = mem::take(set);
+                    let _ = mem::replace(set, values.drain().map(|mut x| {
+                        update_cache_ref(x.get_mut());
+                        x
+                    }).collect());
                 }
                 Meta::Replaces(DocReference(ref mut cache_ref))
                 | Meta::ReplacedBy(DocReference(ref mut cache_ref)) => {
@@ -171,11 +181,11 @@ impl RelationalEntry<DocIdentifier> for StatefulDoc {
 
         for meta in &self.content.meta {
             match meta {
-                Meta::Updates(list)
-                | Meta::Obsoletes(list)
-                | Meta::UpdatedBy(list)
-                | Meta::ObsoletedBy(list) => {
-                    for DocReference(item) in list {
+                Meta::Updates(set)
+                | Meta::Obsoletes(set)
+                | Meta::UpdatedBy(set)
+                | Meta::ObsoletedBy(set) => {
+                    for DocReference(item) in set {
                         missing += count_meta(item);
                     }
                 }

@@ -1,3 +1,4 @@
+use std::collections::HashSet;
 use crate::app::RFCDepApp;
 use crate::doc::DocReference;
 use eframe::egui::{Response, Ui};
@@ -9,7 +10,7 @@ fn name_to_href(ui: &mut Ui, s: &String) -> Response {
     ui.hyperlink_to(s, IetfDoc::<DocReference>::id_to_url(s).unwrap().html())
 }
 
-fn list_meta_links(ui: &mut Ui, list: &Vec<DocReference>) {
+fn list_meta_links(ui: &mut Ui, list: &HashSet<DocReference>) {
     for DocReference(meta) in list {
         match meta {
             CacheReference::Unknown(id) => {

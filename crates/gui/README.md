@@ -20,11 +20,9 @@ Nothing special:
 * build executable `cargo build --release`
 
 ## TODO
-[] reorganize Meta for more efficient lookups
+[] reorganize Meta for more efficient lookups + HashSet instead of Vec
 [] Vec<Meta> => struct(Meta::*::(_))
-[] use XML rather than HTML => allows for metas on drafts too => some don't have the XML version available (rfc7854)
-        => only attempt getting metas for drafts from xml
-[] allow downloading files for offline reading (plane mode)
+[] allow downloading files for offline reading (airplane mode)
 [] real tabs
 [] reduce .clone use on IdType
 [] add cli
