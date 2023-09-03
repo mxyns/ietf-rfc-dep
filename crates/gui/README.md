@@ -20,8 +20,7 @@ Nothing special:
 * build executable `cargo build --release`
 
 ## TODO
-[] reorganize Meta for more efficient lookups + HashSet instead of Vec
-[] Vec<Meta> => struct(Meta::*::(_))
+[~] Vec<Meta> => struct(Meta::*::(_)) [waiting for variant-map to impl IntoIter on StructMap]
 [] allow downloading files for offline reading (airplane mode)
 [] real tabs
 [] reduce .clone use on IdType

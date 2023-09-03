@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use std::mem;
-use std::ops::Deref;
+use std::ops::{Deref, DerefMut};
 
 use rfc_dep_cache::{CacheReference, RelationalEntry, ResolvableEntry};
 use rfc_dep_ietf::{DocIdentifier, IdContainer, IetfDoc, Meta};
@@ -108,7 +108,7 @@ impl RelationalEntry<DocIdentifier> for StatefulDoc {
             };
         };
 
-        for meta in &self.content.meta {
+        for (_, meta) in self.content.meta.deref() {
             match meta {
                 Meta::Updates(list)
                 | Meta::Obsoletes(list)
@@ -148,7 +148,7 @@ impl RelationalEntry<DocIdentifier> for StatefulDoc {
             }
         };
 
-        for meta in &mut self.content.meta {
+        for (_, meta) in self.content.meta.deref_mut() {
             match meta {
                 Meta::Updates(set)
                 | Meta::Obsoletes(set)
@@ -179,7 +179,7 @@ impl RelationalEntry<DocIdentifier> for StatefulDoc {
             CacheReference::Cached(_) => 0,
         };
 
-        for meta in &self.content.meta {
+        for (_, meta) in self.content.meta.deref() {
             match meta {
                 Meta::Updates(set)
                 | Meta::Obsoletes(set)

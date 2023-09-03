@@ -1,4 +1,5 @@
 use std::collections::HashSet;
+use std::ops::Deref;
 use crate::app::RFCDepApp;
 use crate::doc::DocReference;
 use eframe::egui::{Response, Ui};
@@ -99,11 +100,11 @@ impl RFCDepApp {
                             ui.label(doc.summary.title.clone());
                         });
                         row.col(|ui| {
-                            ui.label(doc.meta_count().to_string());
+                            ui.label(doc.meta.count().to_string());
                         });
                         row.col(|ui| {
                             ui.horizontal(|ui| {
-                                for meta in &doc.meta {
+                                for (_, meta) in doc.meta.deref() {
                                     if let Meta::AlsoKnownAs(id) = meta {
                                         name_to_href(ui, id);
                                     }
@@ -112,7 +113,7 @@ impl RFCDepApp {
                         });
                         row.col(|ui| {
                             ui.horizontal(|ui| {
-                                for meta in &doc.meta {
+                                for (_, meta) in doc.meta.deref() {
                                     if let Meta::Was(id) = meta {
                                         name_to_href(ui, id);
                                     }
@@ -121,7 +122,7 @@ impl RFCDepApp {
                         });
                         row.col(|ui| {
                             ui.horizontal(|ui| {
-                                for meta in &doc.meta {
+                                for (_, meta) in doc.meta.deref() {
                                     if let Meta::Replaces(id) = meta {
                                         name_to_href(ui, id);
                                     }
@@ -130,7 +131,7 @@ impl RFCDepApp {
                         });
                         row.col(|ui| {
                             ui.horizontal(|ui| {
-                                for meta in &doc.meta {
+                                for (_, meta) in doc.meta.deref() {
                                     if let Meta::Updates(list) = meta {
                                         list_meta_links(ui, list);
                                     }
@@ -139,7 +140,7 @@ impl RFCDepApp {
                         });
                         row.col(|ui| {
                             ui.horizontal(|ui| {
-                                for meta in &doc.meta {
+                                for (_, meta) in doc.meta.deref() {
                                     if let Meta::Obsoletes(list) = meta {
                                         list_meta_links(ui, list);
                                     }
@@ -148,7 +149,7 @@ impl RFCDepApp {
                         });
                         row.col(|ui| {
                             ui.horizontal(|ui| {
-                                for meta in &doc.meta {
+                                for (_, meta) in doc.meta.deref() {
                                     if let Meta::UpdatedBy(list) = meta {
                                         list_meta_links(ui, list);
                                     }
@@ -157,7 +158,7 @@ impl RFCDepApp {
                         });
                         row.col(|ui| {
                             ui.horizontal(|ui| {
-                                for meta in &doc.meta {
+                                for (_, meta) in doc.meta.deref() {
                                     if let Meta::ObsoletedBy(list) = meta {
                                         list_meta_links(ui, list);
                                     }

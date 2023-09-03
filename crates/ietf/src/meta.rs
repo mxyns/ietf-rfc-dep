@@ -7,15 +7,17 @@ use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use std::fmt::Debug;
 use std::hash::Hash;
+use variant_map::derive::VariantStore;
 
 pub trait IdContainer {
     type Holder<T>: Serialize + DeserializeOwned + Send + Debug + Clone + From<DocIdentifier> + Eq + Hash;
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, VariantStore)]
+#[VariantStore(keys(derive(Clone)), visibility="pub")]
 pub enum Meta<C>
-where
-    C: IdContainer,
+    where
+        C: IdContainer,
 {
     Updates(HashSet<C::Holder<DocIdentifier>>),
     UpdatedBy(HashSet<C::Holder<DocIdentifier>>),
@@ -28,9 +30,22 @@ where
 }
 
 impl<C> Meta<C>
-where
-    C: IdContainer,
+    where
+        C: IdContainer,
 {
+    pub fn count(&self) -> usize {
+        match self {
+            Meta::Updates(list)
+            | Meta::Obsoletes(list)
+            | Meta::UpdatedBy(list)
+            | Meta::ObsoletedBy(list) => list.len(),
+            Meta::Was(_)
+            | Meta::Replaces(_)
+            | Meta::ReplacedBy(_)
+            | Meta::AlsoKnownAs(_) => 1,
+        }
+    }
+
     fn from_inner_text(lines: Vec<&str>) -> HashSet<C::Holder<DocIdentifier>> {
         lines
             .into_iter()
@@ -100,7 +115,7 @@ where
                 String::from_utf8(attr.key.to_ascii_lowercase()),
                 String::from_utf8(attr.value.to_ascii_lowercase())
             ))
-            .into(),
+                .into(),
         }
     }
 }

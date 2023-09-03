@@ -21,3 +21,6 @@ regex = "1.7.0"
 serde_json = { version = "1.0.103", features = ["raw_value"] }
 serde = { version = "1.0.175", features = ["derive"] }
 rayon = { version = "1.7.0" }
+
+# For Meta structs
+variant-map = { git = "https://github.com/mxyns/variant-map", features = ["derive", "macros"] }

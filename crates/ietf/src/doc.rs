@@ -1,7 +1,7 @@
 use crate::error::{DocError::*, Result};
 use crate::meta::Meta;
 use crate::url::SourceUrl;
-use crate::IdContainer;
+use crate::{IdContainer, MetaKey};
 use fast_xml::events::Event;
 use fast_xml::Reader;
 use rayon::iter::Either;
@@ -12,6 +12,8 @@ use reqwest::StatusCode;
 use scraper::{Html, Selector};
 use serde::{Deserialize, Serialize};
 use std::fmt::{Debug, Display};
+use std::ops::{Deref, DerefMut};
+use variant_map::hashmap::Map;
 
 /* Identify IETF documents by String (internal name) for now */
 pub type DocIdentifier = String;
@@ -19,12 +21,13 @@ pub type DocIdentifier = String;
 #[derive(Debug, Clone, Serialize, Deserialize)]
 // C represents the container type used to hold document references
 pub struct IetfDoc<C>
-where
-    C: IdContainer,
+    where
+        C: IdContainer,
 {
     pub summary: Summary,
-    pub meta: Vec<Meta<C>>,
+    pub meta: MetaMap<C>,
 }
+
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Summary {
@@ -33,6 +36,48 @@ pub struct Summary {
     pub is_rfc: bool,
     pub url: SourceUrl,
     pub title: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MetaMap<C>(Map<MetaKey, Meta<C>>)
+    where C: IdContainer;
+
+impl<C> Default for MetaMap<C>
+    where C: IdContainer {
+    fn default() -> Self {
+        Self {
+            0: Default::default(),
+        }
+    }
+}
+
+impl<C> MetaMap<C>
+    where
+        C: IdContainer,
+{
+    fn push_meta(&mut self, meta: Meta<C>) -> Option<Meta<C>> {
+        self.insert(meta)
+    }
+
+    pub fn count(&self) -> usize {
+        self.0.values().map(<Meta<C>>::count).sum()
+    }
+}
+
+impl<C> Deref for MetaMap<C>
+    where C: IdContainer {
+    type Target = Map<MetaKey, Meta<C>>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+impl<C> DerefMut for MetaMap<C>
+    where C: IdContainer {
+
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
+    }
 }
 
 pub fn name_to_id(name: impl Into<String>) -> DocIdentifier {
@@ -51,8 +96,8 @@ fn http_get<T: reqwest::IntoUrl + Display>(url: T) -> Result<Response> {
 
 // TODO better api
 impl<C> IetfDoc<C>
-where
-    C: IdContainer,
+    where
+        C: IdContainer,
 {
     pub fn id_to_url(id: &DocIdentifier) -> Result<SourceUrl> {
         SourceUrl::new(id)
@@ -115,8 +160,8 @@ where
                     scraper::Selector::parse(".revision-list li.page-item.active").unwrap();
                 document.select(&selector).next()
             }
-            .map(|x| x.text().map(str::trim).collect::<String>())
-            .unwrap_or("00".to_string());
+                .map(|x| x.text().map(str::trim).collect::<String>())
+                .unwrap_or("00".to_string());
 
             Some(Summary {
                 url: Self::id_to_url(&id)?,
@@ -144,13 +189,13 @@ where
         Ok(doc)
     }
 
-    fn parse_meta_html(document: &Html) -> Result<Vec<Meta<C>>> {
+    fn parse_meta_html(document: &Html) -> Result<MetaMap<C>> {
         let row_selector =
             Selector::parse("#content > table > tbody.meta.align-top.border-top > tr").unwrap();
         let row_name_selector = Selector::parse("th:last-of-type").unwrap();
         let row_value_selector = Selector::parse("td:not(.edit):last-of-type").unwrap();
         let meta_elems = document.select(&row_selector).collect::<Vec<_>>();
-        let mut doc_meta: Vec<Meta<C>> = Vec::new();
+        let mut doc_meta: MetaMap<C> = MetaMap::default();
         for row in meta_elems {
             let name = row
                 .select(&row_name_selector)
@@ -197,7 +242,7 @@ where
 
             for meta in metas {
                 if let Ok(meta) = meta {
-                    doc_meta.push(meta);
+                    doc_meta.push_meta(meta);
                 } else {
                     println!("Error: {}", meta.err().unwrap())
                 }
@@ -208,12 +253,12 @@ where
     }
 
     // used only on drafts to get the metas
-    fn parse_meta_xml(url: &SourceUrl) -> Result<Vec<Meta<C>>> {
+    fn parse_meta_xml(url: &SourceUrl) -> Result<MetaMap<C>> {
         let resp = http_get(url.xml().clone())?;
         let bytes = resp.bytes()?;
         let mut xml = Reader::from_bytes(bytes.as_ref());
         let mut buf = Vec::new();
-        let mut metas: Vec<Meta<C>> = Vec::new();
+        let mut metas: MetaMap<C> = MetaMap::default();
 
         loop {
             match xml.read_event(&mut buf) {
@@ -223,7 +268,7 @@ where
                             Ok(ref a) => {
                                 let meta = Meta::from_xml(a);
                                 if let Ok(meta) = meta {
-                                    metas.push(meta);
+                                    metas.push_meta(meta);
                                 } else {
                                     println!("{}", meta.err().unwrap())
                                 }
@@ -271,7 +316,7 @@ where
                 "unsuccessful status http/GET status {}",
                 status_code
             ))
-            .into();
+                .into();
         }
 
         let summaries: Vec<Summary> = resp
@@ -308,20 +353,5 @@ where
         println!("{} matches = {:#?}", summaries.len(), &summaries);
 
         Ok(summaries)
-    }
-
-    pub fn meta_count(&self) -> usize {
-        let mut len = 0;
-        for meta in &self.meta {
-            len += match meta {
-                Meta::Updates(list)
-                | Meta::Obsoletes(list)
-                | Meta::UpdatedBy(list)
-                | Meta::ObsoletedBy(list) => list.len(),
-                Meta::Was(_) | Meta::Replaces(_) | Meta::ReplacedBy(_) | Meta::AlsoKnownAs(_) => 1,
-            }
-        }
-
-        len
     }
 }
