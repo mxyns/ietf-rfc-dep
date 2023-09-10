@@ -21,7 +21,8 @@ Nothing special:
 
 ## TODO
 [~] Vec<Meta> => struct(Meta::*::(_)) [waiting for variant-map to impl IntoIter on StructMap]
-[] allow downloading files for offline reading (airplane mode)
+
+[x] allow downloading files for offline reading (airplane mode)
 [] real tabs
 [] reduce .clone use on IdType
 [] add cli

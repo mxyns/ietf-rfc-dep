@@ -63,6 +63,7 @@ pub(crate) struct StatefulDoc {
     pub(crate) is_read: bool,
     pub(crate) is_selected: bool,
     pub(crate) missing_dep_count: usize,
+    pub(crate) offline: Option<String>,
 
     // Temporary State
     pub(crate) to_resolve: bool,
@@ -76,11 +77,25 @@ impl StatefulDoc {
             is_read: false,
             is_selected: false,
             to_resolve: false,
+            offline: None,
         };
 
         doc.missing_dep_count = doc.get_unknown_relations_count();
 
         doc
+    }
+
+    pub(crate) fn download(&mut self) -> rfc_dep_ietf::error::Result<()> {
+
+        if let Some(_) = self.offline {
+            return Ok(())
+        }
+
+        self.offline = Some (
+            self.content.download_raw()?
+        );
+
+        Ok(())
     }
 }
 
@@ -131,7 +146,8 @@ impl RelationalEntry<DocIdentifier> for StatefulDoc {
     fn update_unknown_references(&mut self, is_known: impl Fn(&DocIdentifier) -> bool) -> isize {
         let mut change = 0;
 
-        let mut update_cache_ref = |cache_ref: &mut CacheReference<DocIdentifier>| match cache_ref {
+        let mut update_cache_ref = |cache_ref: &mut CacheReference<DocIdentifier>|
+            *cache_ref = match cache_ref {
             CacheReference::Unknown(ref mut r) if is_known(r) => {
                 change += 1;
                 CacheReference::Cached(mem::take(r))
@@ -162,7 +178,7 @@ impl RelationalEntry<DocIdentifier> for StatefulDoc {
                 }
                 Meta::Replaces(DocReference(ref mut cache_ref))
                 | Meta::ReplacedBy(DocReference(ref mut cache_ref)) => {
-                    *cache_ref = update_cache_ref(cache_ref);
+                    update_cache_ref(cache_ref);
                 }
                 Meta::Was(_) | Meta::AlsoKnownAs(_) => {}
             }

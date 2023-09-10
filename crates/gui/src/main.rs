@@ -8,6 +8,7 @@ mod settings;
 mod sidebar;
 mod table_view;
 mod tabs;
+mod viewer;
 
 // TODO support datatracker -> refererences/referencedby (https://datatracker.ietf.org/doc/draft-raszuk-idr-flow-spec-v6/)
 fn main() {

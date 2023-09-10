@@ -3,7 +3,7 @@ use std::collections::BTreeMap;
 use std::fmt;
 use std::fmt::Debug;
 use std::hash::Hash;
-use std::ops::Deref;
+use std::ops::{Deref, DerefMut};
 
 pub trait CacheIdentifier: Eq + Hash + Ord {}
 
@@ -12,6 +12,20 @@ impl<T> CacheIdentifier for T where T: Eq + Hash + Ord {}
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Cache<IdType: CacheIdentifier, ValueType> {
     pub(crate) map: BTreeMap<IdType, ValueType>,
+}
+
+impl<IdType: CacheIdentifier, ValueType> Deref for Cache<IdType, ValueType> {
+    type Target = BTreeMap<IdType, ValueType>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.map
+    }
+}
+
+impl<IdType: CacheIdentifier, ValueType> DerefMut for Cache<IdType, ValueType> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.map
+    }
 }
 
 impl<IdType: CacheIdentifier, ValueType> Default for Cache<IdType, ValueType> {

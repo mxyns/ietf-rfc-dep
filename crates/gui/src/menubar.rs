@@ -4,6 +4,7 @@ use egui_modal::Modal;
 use if_chain::if_chain;
 use std::fs::File;
 use std::time::Duration;
+use rayon::prelude::*;
 
 use rfc_dep_cache::{ResolveParams, ResolveTarget};
 use rfc_dep_ietf::IetfDoc;
@@ -15,6 +16,7 @@ use crate::doc::StatefulDoc;
 impl RFCDepApp {
     pub(crate) fn make_menu(&mut self, ui: &mut Ui, confirm_clear: Modal, import_name: Modal) {
         egui::menu::bar(ui, |ui| {
+
             ui.menu_button("File", |ui| {
                 // Open Button
                 if_chain! {
@@ -64,7 +66,6 @@ impl RFCDepApp {
                     confirm_clear.open();
                 }
             });
-
             ui.menu_button("Document", |ui| {
                 if ui.button("From name").clicked() {
                     import_name.open()
@@ -91,6 +92,32 @@ impl RFCDepApp {
                             self.list_selected_count = 0;
                         }
                     });
+
+                    ui.separator();
+
+                    ui.add_enabled_ui(self.list_selected_count > 0, |ui| {
+                        if ui.button("Download selected").clicked() {
+                            let errs: Vec<_> = (&mut self.cache).into_iter().par_bridge().filter_map(|(_, v)| {
+                                v.download().err()
+                            }).collect();
+
+                            errs.iter().for_each(|err| {
+                                self.toasts.error(err.to_string())
+                                    .set_duration(Some(Duration::from_secs(5)));
+                            });
+                        }
+                    });
+
+                    ui.add_enabled_ui(self.list_selected_count > 0, |ui| {
+                        if ui.button("Forget selected").clicked() {
+                            (&mut self.cache).into_iter().for_each(|(_, v)| {
+                                v.offline = None
+                            });
+                        }
+                    });
+
+                    ui.separator();
+
                     ui.add_enabled_ui(self.list_selected_count > 0, |ui| {
                         if ui.button("Remove selected").clicked() {
                             self.cache.retain(|_, state| !state.is_selected);

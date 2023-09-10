@@ -6,7 +6,7 @@ pub(crate) struct Tabs;
 
 impl Tabs {
     pub(crate) fn all() -> Vec<Tab> {
-        vec![Tab::Table, Tab::Graph]
+        vec![Tab::Table, Tab::Graph, Tab::Viewer]
     }
 }
 
@@ -20,12 +20,16 @@ impl RFCDepApp {
     }
 
     pub(crate) fn make_tab_view(&mut self, ui: &mut Ui) {
-        match self.selected_tab {
+        let tab = self.selected_tab.clone();
+        match tab {
             Tab::Table => {
                 self.make_table_view(ui);
             }
             Tab::Graph => {
                 ui.label("todo!()");
+            }
+            Tab::Viewer => {
+                self.make_viewer_view(ui)
             }
         }
     }
@@ -36,6 +40,7 @@ pub enum Tab {
     #[default]
     Table,
     Graph,
+    Viewer,
 }
 
 impl Tab {
@@ -49,6 +54,11 @@ impl Tab {
             Tab::Graph => {
                 if ui.button("graph").clicked() {
                     app.selected_tab = Tab::Graph;
+                }
+            }
+            Tab::Viewer => {
+                if ui.button("viewer").clicked() {
+                    app.selected_tab = Tab::Viewer
                 }
             }
         }

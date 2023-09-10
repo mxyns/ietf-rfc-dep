@@ -5,8 +5,8 @@ use url::Url;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SourceUrl {
+    id: String,
     html: Url,
-    xml: Url,
 }
 
 impl SourceUrl {
@@ -14,14 +14,26 @@ impl SourceUrl {
         &self.html
     }
 
-    pub fn xml(&self) -> &Url {
-        &self.xml
+    pub fn xml(&self, is_rfc: bool) -> Result<Url> {
+        Ok(if is_rfc {
+            Url::from_str(format!("https://www.rfc-editor.org/rfc/{}.xml", self.id).as_str())?
+        } else {
+            Url::from_str(format!("https://www.ietf.org/archive/id/{}.xml", self.id).as_str())?
+        })
+    }
+
+    pub fn raw(&self, is_rfc: bool) -> Result<Url> {
+        Ok(if is_rfc {
+            Url::from_str(format!("https://www.rfc-editor.org/rfc/{}.txt", self.id).as_str())?
+        } else {
+            Url::from_str(format!("https://www.ietf.org/archive/id/{}.txt", self.id).as_str())?
+        })
     }
 
     pub fn new(id: &String) -> Result<Self> {
         Ok(Self {
+            id: id.clone(),
             html: Url::from_str(format!("https://datatracker.ietf.org/doc/{}", id).as_str())?,
-            xml: Url::from_str(format!("https://www.ietf.org/archive/id/{}.xml", id).as_str())?,
         })
     }
 

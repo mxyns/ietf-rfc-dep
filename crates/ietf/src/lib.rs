@@ -1,5 +1,5 @@
 mod doc;
-mod error;
+pub mod error;
 mod meta;
 mod url;
 

@@ -2,7 +2,6 @@ use derivative::Derivative;
 use eframe::egui;
 use egui_notify::Toasts;
 use std::thread::JoinHandle;
-
 use rfc_dep_cache::{ResolveParams, ResolveTarget};
 use rfc_dep_ietf::{DocIdentifier, Summary};
 
@@ -33,6 +32,7 @@ pub struct RFCDepApp {
 
     // RFC Viewer
     pub(crate) selected_tab: Tab,
+    pub(crate) viewed_doc: Option<DocIdentifier>
 }
 
 impl RFCDepApp {
@@ -74,7 +74,7 @@ impl eframe::App for RFCDepApp {
             let to_resolve: Vec<DocIdentifier> = self
                 .cache
                 .into_iter()
-                .filter_map(|(id, state)| if state.to_resolve { Some(id) } else { None })
+                .filter_map(|(id, state)| if state.to_resolve { println!("{:#?}", state); Some(id) } else { None })
                 .cloned()
                 .collect();
 

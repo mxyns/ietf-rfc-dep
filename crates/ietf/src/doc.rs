@@ -178,7 +178,7 @@ impl<C> IetfDoc<C>
         let doc_meta = if summary.is_rfc || !Self::xml_is_available(&document) {
             Self::parse_meta_html(&document)?
         } else {
-            Self::parse_meta_xml(&summary.url)?
+            Self::parse_meta_xml(&summary.url, summary.is_rfc)?
         };
 
         let doc = IetfDoc {
@@ -253,8 +253,8 @@ impl<C> IetfDoc<C>
     }
 
     // used only on drafts to get the metas
-    fn parse_meta_xml(url: &SourceUrl) -> Result<MetaMap<C>> {
-        let resp = http_get(url.xml().clone())?;
+    fn parse_meta_xml(url: &SourceUrl, is_rfc: bool) -> Result<MetaMap<C>> {
+        let resp = http_get(url.xml(is_rfc)?)?;
         let bytes = resp.bytes()?;
         let mut xml = Reader::from_bytes(bytes.as_ref());
         let mut buf = Vec::new();
@@ -353,5 +353,14 @@ impl<C> IetfDoc<C>
         println!("{} matches = {:#?}", summaries.len(), &summaries);
 
         Ok(summaries)
+    }
+
+    pub fn download_raw(&self) -> Result<String> {
+
+        let is_rfc = self.summary.is_rfc;
+        let url = self.summary.url.raw(is_rfc)?;
+        let resp = http_get(url)?;
+
+        Ok(resp.text()?)
     }
 }
